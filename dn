@@ -1,0 +1,74 @@
+-- GUI + Dungeon Automation for Arise Crossover
+local player = game.Players.LocalPlayer
+local remotes = game:GetService("ReplicatedStorage"):WaitForChild("Remotes")
+local mobsFolder = game.Workspace:WaitForChild("Mobs")
+
+-- Flags
+local autoDungeon = false
+local autoKill = false
+
+-- GUI Setup
+local screenGui = Instance.new("ScreenGui", player:WaitForChild("PlayerGui"))
+screenGui.Name = "AriseDungeonGUI"
+
+local frame = Instance.new("Frame", screenGui)
+frame.Size = UDim2.new(0, 200, 0, 120)
+frame.Position = UDim2.new(0, 20, 0, 100)
+frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+frame.BorderSizePixel = 0
+
+local dungeonBtn = Instance.new("TextButton", frame)
+dungeonBtn.Size = UDim2.new(1, 0, 0, 50)
+dungeonBtn.Position = UDim2.new(0, 0, 0, 0)
+dungeonBtn.Text = "Auto Dungeon: OFF"
+dungeonBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+dungeonBtn.TextColor3 = Color3.new(1, 1, 1)
+
+local killBtn = Instance.new("TextButton", frame)
+killBtn.Size = UDim2.new(1, 0, 0, 50)
+killBtn.Position = UDim2.new(0, 0, 0, 60)
+killBtn.Text = "Limpar Dungeon: OFF"
+killBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+killBtn.TextColor3 = Color3.new(1, 1, 1)
+
+-- Toggle Functions
+dungeonBtn.MouseButton1Click:Connect(function()
+    autoDungeon = not autoDungeon
+    dungeonBtn.Text = "Auto Dungeon: " .. (autoDungeon and "ON" or "OFF")
+end)
+
+killBtn.MouseButton1Click:Connect(function()
+    autoKill = not autoKill
+    killBtn.Text = "Limpar Dungeon: " .. (autoKill and "ON" or "OFF")
+end)
+
+-- Auto Dungeon Loop
+spawn(function()
+    while true do
+        if autoDungeon and remotes:FindFirstChild("Dungeon") then
+            remotes.Dungeon:FireServer("Enter", "Solo")
+        end
+        wait(60)
+    end
+end)
+
+-- Auto Kill Loop
+spawn(function()
+    while true do
+        if autoKill then
+            local char = player.Character or player.CharacterAdded:Wait()
+            local hrp = char:FindFirstChild("HumanoidRootPart")
+            if hrp then
+                for _, mob in pairs(mobsFolder:GetChildren()) do
+                    if mob:FindFirstChild("Humanoid") and mob:FindFirstChild("HumanoidRootPart") then
+                        if mob.Humanoid.Health > 0 then
+                            hrp.CFrame = mob.HumanoidRootPart.CFrame + Vector3.new(0, 2, 0)
+                            remotes.Attack:FireServer(mob)
+                        end
+                    end
+                end
+            end
+        end
+        wait(0.3)
+    end
+end)
