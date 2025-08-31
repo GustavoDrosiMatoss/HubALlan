@@ -2,7 +2,6 @@ if not game or not game.GetService then
     warn("Ambiente do jogo não está disponível.")
     return
 end
-
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
@@ -939,33 +938,22 @@ local dungeonFolder = workspace:WaitForChild("__Main"):WaitForChild("__Dungeon")
 -- Variable to control teleporting
 local teleportingEnabled = false
 
--- Função para criar e iniciar dungeon
-local function criarDungeon()
+-- Function to create a dungeon
+local function createDungeon()
+    print("[DEBUG] Tentando criar dungeon...")
     local args = {
         [1] = {
             [1] = {
                 ["Event"] = "DungeonAction",
                 ["Action"] = "Create"
             },
-            [2] = "\12"
+            [2] = "\n" 
         }
     }
-    attackRemote:FireServer(args)
-    print("✔ Dungeon criada.")
-    task.wait(3)
-
-    local iniciarArgs = {
-        [1] = {
-            [1] = {
-                ["Event"] = "DungeonAction",
-                ["Action"] = "Start"
-            },
-            [2] = "\12"
-        }
-    }
-    attackRemote:FireServer(iniciarArgs)
-    print("▶ Dungeon iniciada.")
+    ReplicatedStorage:WaitForChild("BridgeNet2"):WaitForChild("dataRemoteEvent"):FireServer(unpack(args))
+    print("[DEBUG] Evento de criação de Dungeon ativado!")
 end
+
 -- Function to start the dungeon
 local function startDungeon()
     local dungeonInstance = dungeonFolder:FindFirstChild("Dungeon")
