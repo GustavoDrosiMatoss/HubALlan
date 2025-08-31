@@ -939,12 +939,33 @@ local dungeonFolder = workspace:WaitForChild("__Main"):WaitForChild("__Dungeon")
 -- Variable to control teleporting
 local teleportingEnabled = false
 
-local iniciarDungeon = function()
-    print("▶️ Iniciando dungeon...")
-    local args = { [1] = { [1] = { Event = "DungeonAction", Action = "Start" }, [2] = "\12" } }
-    game.ReplicatedStorage.BridgeNet2.dataRemoteEvent:FireServer(unpack(args))
-end
+-- Função para criar e iniciar dungeon
+local function criarDungeon()
+    local args = {
+        [1] = {
+            [1] = {
+                ["Event"] = "DungeonAction",
+                ["Action"] = "Create"
+            },
+            [2] = "\12"
+        }
+    }
+    attackRemote:FireServer(args)
+    print("✔ Dungeon criada.")
+    task.wait(3)
 
+    local iniciarArgs = {
+        [1] = {
+            [1] = {
+                ["Event"] = "DungeonAction",
+                ["Action"] = "Start"
+            },
+            [2] = "\12"
+        }
+    }
+    attackRemote:FireServer(iniciarArgs)
+    print("▶ Dungeon iniciada.")
+end
 -- Function to start the dungeon
 local function startDungeon()
     local dungeonInstance = dungeonFolder:FindFirstChild("Dungeon")
