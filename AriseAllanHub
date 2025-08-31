@@ -1,8 +1,11 @@
+print(
+    print( 
+        farm = ""
+    )
 if not game or not game.GetService then
     warn("Ambiente do jogo não está disponível.")
     return
 end
-
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
@@ -21,10 +24,29 @@ local selectedMobName = ""
 local movementMethod = "Tween" -- Método de movimento padrão
 local farmingStyle = "Default" -- Estilo de farm padrão
 
+
+local dungeonActive = false
+local tempFile = "HTHub/AriseCrossover/DungeonTemp.txt"
+
+local function isInDungeon()
+    local dungeonFolder = workspace:WaitForChild("__Main"):FindFirstChild("__Dungeon")
+    return dungeonFolder and dungeonFolder:FindFirstChild("Dungeon") ~= nil
+end
+
+local function safeDelete(filePath)
+    if isfile and isfile(filePath) then
+        delfile(filePath)
+    end
+end
+-- 🏰 Funções de controle da Dungeon
+local function iniciarDungeon() ... end
+local function criarDungeon() ... end
+local function resetarDungeon() ... end
+
 -- Novo sistema de armazenamento
 local ConfigSystem = {}
 local HttpService = game:GetService("HttpService")
-ConfigSystem.Folder = "Allan Hub"
+ConfigSystem.Folder = "HTHub"
 ConfigSystem.SubFolder = "AriseCrossover"
 ConfigSystem.FileName = player.Name .. "_Config.json"
 ConfigSystem.FilePath = ConfigSystem.Folder .. "/" .. ConfigSystem.SubFolder .. "/" .. ConfigSystem.FileName
@@ -200,10 +222,10 @@ end
 -- Configurar SaveManager do Fluent para compatibilidade
 local playerName = game:GetService("Players").LocalPlayer.Name
 if InterfaceManager then
-    InterfaceManager:SetFolder("Allan Hub")
+    InterfaceManager:SetFolder("HTHub")
 end
 if SaveManager then
-    SaveManager:SetFolder("Allan Hub/AriseCrossover/" .. playerName)
+    SaveManager:SetFolder("HTHub/AriseCrossover/" .. playerName)
 end
 
 -- Detectar automaticamente novo HumanoidRootPart quando o jogador renascer
@@ -355,6 +377,74 @@ local function teleportAndTrackDeath()
         task.wait(0.2)
     end
 end
+local dungeonActive = false
+local tempFile = "HTHub/AriseCrossover/DungeonTemp.txt"
+
+local function isInDungeon()
+    local dungeonFolder = workspace:WaitForChild("__Main"):FindFirstChild("__Dungeon")
+    return dungeonFolder and dungeonFolder:FindFirstChild("Dungeon") ~= nil
+end
+
+local function safeDelete(filePath)
+    if isfile and isfile(filePath) then
+        delfile(filePath)
+    end
+end
+
+local function iniciarDungeon()
+    print("▶️ Iniciando dungeon...")
+    local args = {
+        [1] = {
+            [1] = { Event = "DungeonAction", Action = "Start" },
+            [2] = "\12"
+        }
+    }
+    game.ReplicatedStorage.BridgeNet2.dataRemoteEvent:FireServer(unpack(args))
+end
+
+local function criarDungeon()
+    if dungeonActive then
+        print("⚠️ Dungeon já está ativa, pulando criação")
+        return
+    end
+
+    if isInDungeon() then
+        print("⚠️ Já está em uma dungeon")
+        dungeonActive = true
+        salvarConfig()
+        return
+    end
+
+    print("🆕 Criando nova dungeon...")
+    local args = {
+        [1] = {
+            [1] = { Event = "DungeonAction", Action = "Create" },
+            [2] = "\12"
+        }
+    }
+    game.ReplicatedStorage.BridgeNet2.dataRemoteEvent:FireServer(unpack(args))
+
+    dungeonActive = true
+    salvarConfig()
+    writefile(tempFile, "1")
+
+    task.wait(5)
+    iniciarDungeon()
+end
+
+local function resetarDungeon()
+    print("💎 Resetando dungeon com gems...")
+    local args = {
+        [1] = {
+            [1] = { Type = "Gems", Event = "DungeonAction", Action = "BuyTicket" },
+            [2] = "\12"
+        }
+    }
+    game.ReplicatedStorage.BridgeNet2.dataRemoteEvent:FireServer(unpack(args))
+    dungeonActive = false
+    salvarConfig()
+    safeDelete(tempFile)
+end
 
 local function teleportDungeon()
     while teleportEnabled do
@@ -468,7 +558,7 @@ if not Fluent then
 end
 
 local Window = Fluent:CreateWindow({
-    Title = "Allan Hub | Arise Crossover",
+    Title = "HT HUB | Arise Crossover",
     SubTitle = "",
     TabWidth = 140,
     Size = UDim2.fromOffset(450, 350),
@@ -940,18 +1030,48 @@ local dungeonFolder = workspace:WaitForChild("__Main"):WaitForChild("__Dungeon")
 local teleportingEnabled = false
 
 -- Function to create a dungeon
-local iniciarDungeon = function()
-    print("▶️ Iniciando dungeon...")
-    local args = { [1] = { [1] = { Event = "DungeonAction", Action = "Start" }, [2] = "\12" } }
-    game.ReplicatedStorage.BridgeNet2.dataRemoteEvent:FireServer(unpack(args))
+local function createDungeon()
+    print("[DEBUG] Tentando criar dungeon...")
+    local args = {
+        [1] = {
+            [1] = {
+                ["Event"] = "DungeonAction",
+                ["Action"] = "Create"
+            },
+            [2] = "\n" 
+        }
+    }
+    ReplicatedStorage:WaitForChild("BridgeNet2"):WaitForChild("dataRemoteEvent"):FireServer(unpack(args))
+    print("[DEBUG] Evento de criação de Dungeon ativado!")
 end
 
-local criarDungeon = function()
-    if dungeonActive then 
-        print("⚠️ Dungeon já está ativa, pulando criação")
-        return 
+-- Function to start the dungeon
+local function startDungeon()
+    local dungeonInstance = dungeonFolder:FindFirstChild("Dungeon")
+    if dungeonInstance then
+        local dungeonID = dungeonInstance:GetAttribute("ID")
+        if dungeonID then
+            print("[DEBUG] Iniciando dungeon com ID:", dungeonID)
+            local args = {
+                [1] = {
+                    [1] = {
+                        ["Dungeon"] = dungeonID,
+                        ["Event"] = "DungeonAction",
+                        ["Action"] = "Start"
+                    },
+                    [2] = "\n"
+                }
+            }
+            ReplicatedStorage:WaitForChild("BridgeNet2"):WaitForChild("dataRemoteEvent"):FireServer(unpack(args))
+            print("[DEBUG] Evento de início da Dungeon ativado!")
+        else
+            print("[LỖI] Não foi encontrado ID da Dungeon!")
+        end
+    else
+        print("[LỖI] Não foi encontrada instância da Dungeon!")
     end
-    
+end
+
 -- Function to teleport directly to an object and bypass anti-cheat
 local function teleportToObject(object)
     if object and object:IsA("Part") then
@@ -1622,7 +1742,7 @@ end)
 
 Tabs.Discord:AddParagraph({
     Title = "Thông tin",
-    Content = "Script được tạo bởi Allan Hub"
+    Content = "Script được tạo bởi HT HUB"
 })
 
 Tabs.Discord:AddButton({
@@ -1644,8 +1764,8 @@ InterfaceManager:SetLibrary(Fluent)
 
 -- Thay đổi cách lưu cấu hình để sử dụng tên người chơi
 local playerName = game:GetService("Players").LocalPlayer.Name
-InterfaceManager:SetFolder("Allan Hub")
-SaveManager:SetFolder("Allan Hub/AriseCrossover/" .. playerName)
+InterfaceManager:SetFolder("HTHub")
+SaveManager:SetFolder("HTHub/AriseCrossover/" .. playerName)
 
 -- Xóa đoạn xây dựng phần cấu hình trong Settings tab
 -- InterfaceManager:BuildInterfaceSection(Tabs.Settings)
@@ -1679,7 +1799,7 @@ Tabs.Settings:AddButton({
 Window:SelectTab(1)
 
 Fluent:Notify({
-    Title = "Allan Hub",
+    Title = "HT HUB",
     Content = "Script đã tải xong! Cấu hình tự động lưu theo tên người chơi: " .. playerName,
     Duration = 3
 })
@@ -1760,7 +1880,7 @@ end)
 local scriptSuccess, scriptError = pcall(function()
     Fluent:Notify({
         Title = "Script iniciado com sucesso",
-        Content = "Allan Hub | Arise Crossover está ativo",
+        Content = "HT Hub | Arise Crossover está ativo",
         Duration = 5
     })
 end)
@@ -1777,7 +1897,7 @@ if not scriptSuccess then
         textLabel.Position = UDim2.new(0.35, 0, 0.45, 0)
         textLabel.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
         textLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-        textLabel.Text = "Allan Hub đã khởi động nhưng gặp lỗi. Hãy thử lại."
+        textLabel.Text = "HT Hub đã khởi động nhưng gặp lỗi. Hãy thử lại."
         textLabel.Parent = screenGui
         
         local uiCorner = Instance.new("UICorner")
@@ -2379,5 +2499,20 @@ Tabs.dungeon:AddToggle("TeleportMobs", {
                 monitorEnemies()
             end)
         end
+    end
+})
+Tabs.dungeon:AddButton({
+    Title = "Criar Dungeon",
+    Description = "Cria e inicia uma nova dungeon",
+    Callback = function()
+        criarDungeon()
+    end
+})
+
+Tabs.dungeon:AddButton({
+    Title = "Resetar Dungeon",
+    Description = "Compra ticket e reseta dungeon",
+    Callback = function()
+        resetarDungeon()
     end
 })
