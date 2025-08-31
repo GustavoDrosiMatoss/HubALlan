@@ -942,15 +942,7 @@ local teleportingEnabled = false
 local function createDungeon()
     print("[DEBUG] Tentando criar dungeon...")
     local args = {
-        [1] = {
-            [1] = {
-                ["Event"] = "DungeonAction",
-                ["Action"] = "Create"
-            },
-            [2] = "\n" 
-        }
-    }
-    ReplicatedStorage:WaitForChild("BridgeNet2"):WaitForChild("dataRemoteEvent"):FireServer(unpack(args))
+        local args = { [1] = { [1] = { Event = "DungeonAction", Action = "Start" }, [2] = "\12" } }age:WaitForChild("BridgeNet2"):WaitForChild("dataRemoteEvent"):FireServer(unpack(args))
     print("[DEBUG] Evento de criação de Dungeon ativado!")
 end
 
