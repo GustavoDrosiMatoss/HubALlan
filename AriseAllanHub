@@ -67,13 +67,16 @@ ConfigSystem.SaveConfig = function()
     -- Mã hóa cấu hình thành chuỗi JSON
     local jsonData = HttpService:JSONEncode(ConfigSystem.CurrentConfig)
     
-    -- Testar diferentes métodos de salvar
-    local success, err = pcall(function()
-        -- Método 1: writefile trực tiếp (Synapse X, KRNL, Script-Ware)
-        if writefile then
-            writefile(ConfigSystem.FilePath, jsonData)
-            return true
-        end
+   - Testar diferentes métodos de salvar
+local success, err = pcall(function()
+    -- Verifica se writefile existe e é uma função válida
+    if typeof(writefile) == "function" then
+        writefile(ConfigSystem.FilePath, jsonData)
+        return true
+    else
+        warn("Função 'writefile' não está disponível neste executor.")
+    end
+end)
         
         -- Método 2: Usar SaveInstance (alguns outros executores)
         if saveinstance then
