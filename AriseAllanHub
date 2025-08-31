@@ -937,11 +937,10 @@ local dungeonFolder = workspace:WaitForChild("__Main"):WaitForChild("__Dungeon")
 
 -- Variable to control teleporting
 local teleportingEnabled = false
-
--- Function to create a dungeon
+-- Função para criar a dungeon
 local function createDungeon()
     print("[DEBUG] Tentando criar dungeon...")
-   local args = {
+    local args = {
         [1] = {
             [1] = {
                 ["Event"] = "DungeonAction",
@@ -950,10 +949,11 @@ local function createDungeon()
             [2] = "\12"
         }
     }
-    attackRemote:FireServer(args)
+    game:GetService("ReplicatedStorage").BridgeNet2.dataRemoteEvent:FireServer(unpack(args))
     print("✔ Dungeon criada.")
     task.wait(3)
 
+    -- Iniciar a dungeon
     local iniciarArgs = {
         [1] = {
             [1] = {
@@ -963,15 +963,11 @@ local function createDungeon()
             [2] = "\12"
         }
     }
-    attackRemote:FireServer(iniciarArgs)
+    game:GetService("ReplicatedStorage").BridgeNet2.dataRemoteEvent:FireServer(unpack(iniciarArgs))
     print("▶ Dungeon iniciada.")
-
-
-    ReplicatedStorage:WaitForChild("BridgeNet2"):WaitForChild("dataRemoteEvent"):FireServer(unpack(args))
-    print("[DEBUG] Evento de criação de Dungeon ativado!")
 end
 
--- Function to start the dungeon
+-- Function to start the dungeon (mantida como backup)
 local function startDungeon()
     local dungeonInstance = dungeonFolder:FindFirstChild("Dungeon")
     if dungeonInstance then
@@ -1015,10 +1011,7 @@ local function teleportToObject(object)
         print("[DEBUG] Teleport concluído para:", object.Name)
 
         task.wait(2) -- Pequeno atraso após teleporte
-        createDungeon() -- Kích hoạt remote tạo dungeon
-
-        task.wait(1) -- Pequeno atraso antes de iniciar dungeon
-        startDungeon() -- Kích hoạt remote bắt đầu dungeon
+        createDungeon() -- Kích hoạt remote tạo dungeon usando a função corrigida
     else
         print("[LỖI] Alvo de teleporte inválido!")
     end
