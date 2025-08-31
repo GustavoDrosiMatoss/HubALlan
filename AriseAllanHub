@@ -939,48 +939,18 @@ local dungeonFolder = workspace:WaitForChild("__Main"):WaitForChild("__Dungeon")
 local teleportingEnabled = false
 
 -- Function to create a dungeon
-local function createDungeon()
-    print("[DEBUG] Tentando criar dungeon...")
-    local args = {
-        [1] = {
-            [1] = {
-                ["Event"] = "DungeonAction",
-                ["Action"] = "Create"
-            },
-            [2] = "\n" 
-        }
-    }
-    ReplicatedStorage:WaitForChild("BridgeNet2"):WaitForChild("dataRemoteEvent"):FireServer(unpack(args))
-    print("[DEBUG] Evento de criação de Dungeon ativado!")
+local iniciarDungeon = function()
+    print("▶️ Iniciando dungeon...")
+    local args = { [1] = { [1] = { Event = "DungeonAction", Action = "Start" }, [2] = "\12" } }
+    game.ReplicatedStorage.BridgeNet2.dataRemoteEvent:FireServer(unpack(args))
 end
 
--- Function to start the dungeon
-local function startDungeon()
-    local dungeonInstance = dungeonFolder:FindFirstChild("Dungeon")
-    if dungeonInstance then
-        local dungeonID = dungeonInstance:GetAttribute("ID")
-        if dungeonID then
-            print("[DEBUG] Iniciando dungeon com ID:", dungeonID)
-            local args = {
-                [1] = {
-                    [1] = {
-                        ["Dungeon"] = dungeonID,
-                        ["Event"] = "DungeonAction",
-                        ["Action"] = "Start"
-                    },
-                    [2] = "\n"
-                }
-            }
-            ReplicatedStorage:WaitForChild("BridgeNet2"):WaitForChild("dataRemoteEvent"):FireServer(unpack(args))
-            print("[DEBUG] Evento de início da Dungeon ativado!")
-        else
-            print("[LỖI] Não foi encontrado ID da Dungeon!")
-        end
-    else
-        print("[LỖI] Não foi encontrada instância da Dungeon!")
+local criarDungeon = function()
+    if dungeonActive then 
+        print("⚠️ Dungeon já está ativa, pulando criação")
+        return 
     end
-end
-
+    
 -- Function to teleport directly to an object and bypass anti-cheat
 local function teleportToObject(object)
     if object and object:IsA("Part") then
