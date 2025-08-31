@@ -1,7 +1,3 @@
-if not game or not game.GetService then
-    warn("Ambiente do jogo não está disponível.")
-    return
-end
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
@@ -955,12 +951,33 @@ local function createDungeon()
 end
 
 -- Function to start the dungeon
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Main = workspace:WaitForChild("__Main")
+local DungeonFolder = Main:WaitForChild("__Dungeon")
+
+-- Função para criar a dungeon
+local function createDungeon()
+    local args = {
+        [1] = {
+            [1] = {
+                ["Event"] = "DungeonAction",
+                ["Action"] = "Create"
+            },
+            [2] = "\\n"
+        }
+    }
+    ReplicatedStorage:WaitForChild("BridgeNet2"):WaitForChild("dataRemoteEvent"):FireServer(unpack(args))
+end
+
+-- Função para iniciar a dungeon
 local function startDungeon()
-    local dungeonInstance = dungeonFolder:FindFirstChild("Dungeon")
+    local dungeonInstance = DungeonFolder:FindFirstChild("Dungeon")
+    
     if dungeonInstance then
         local dungeonID = dungeonInstance:GetAttribute("ID")
+        
         if dungeonID then
-            print("[DEBUG] Iniciando dungeon com ID:", dungeonID)
+            print("Iniciando dungeon com ID:", dungeonID)
             local args = {
                 [1] = {
                     [1] = {
@@ -968,18 +985,36 @@ local function startDungeon()
                         ["Event"] = "DungeonAction",
                         ["Action"] = "Start"
                     },
-                    [2] = "\n"
+                    [2] = "\\n"
                 }
             }
             ReplicatedStorage:WaitForChild("BridgeNet2"):WaitForChild("dataRemoteEvent"):FireServer(unpack(args))
-            print("[DEBUG] Evento de início da Dungeon ativado!")
         else
-            print("[LỖI] Não foi encontrado ID da Dungeon!")
+            warn("ID da dungeon não encontrado.")
         end
     else
-        print("[LỖI] Não foi encontrada instância da Dungeon!")
+        warn("Instância da dungeon não encontrada.")
     end
 end
+
+-- Execução
+createDungeon()
+
+-- Espera até que a dungeon seja criada
+task.spawn(function()
+    local timeout = 5
+    local elapsed = 0
+    while not DungeonFolder:FindFirstChild("Dungeon") and elapsed < timeout do
+        task.wait(0.5)
+        elapsed += 0.5
+    end
+
+    if DungeonFolder:FindFirstChild("Dungeon") then
+        startDungeon()
+    else
+        warn("Dungeon não foi criada dentro do tempo esperado.")
+    end
+end)
 
 -- Function to teleport directly to an object and bypass anti-cheat
 local function teleportToObject(object)
@@ -2410,4 +2445,3 @@ Tabs.dungeon:AddToggle("TeleportMobs", {
         end
     end
 })
-
