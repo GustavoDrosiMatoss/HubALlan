@@ -2343,6 +2343,37 @@ Tabs.shop:AddToggle("AutoSellToggle", {
         end
     end
 })
+-- Função para criar a dungeon
+local function createDungeon()
+    print("[DEBUG] Tentando criar dungeon...")
+    local args = {
+        [1] = {
+            [1] = {
+                ["Event"] = "DungeonAction",
+                ["Action"] = "Create"
+            },
+            [2] = "\12"
+        }
+    }
+    game:GetService("ReplicatedStorage").BridgeNet2.dataRemoteEvent:FireServer(unpack(args))
+    print("✔ Dungeon criada.")
+    task.wait(3)
+
+    -- Iniciar a dungeon
+    local iniciarArgs = {
+        [1] = {
+            [1] = {
+                ["Event"] = "DungeonAction",
+                ["Action"] = "Start"
+            },
+            [2] = "\12"
+        }
+    }
+    game:GetService("ReplicatedStorage").BridgeNet2.dataRemoteEvent:FireServer(unpack(iniciarArgs))
+    print("▶ Dungeon iniciada.")
+end
+
+-- Toggle com recriação automática de dungeon
 Tabs.dungeon:AddToggle("TeleportMobs", {
     Title = "Auto farm Dungeon",
     Default = false,
@@ -2355,6 +2386,9 @@ Tabs.dungeon:AddToggle("TeleportMobs", {
                 local player = game.Players.LocalPlayer
                 local enemiesFolder = workspace.__Main.__Enemies.Server
                 local currentTween = nil
+                local noEnemiesTimer = 0 -- Timer para contar tempo sem inimigos
+                local maxTimeWithoutEnemies = 30 -- 30 segundos sem inimigos antes de recriar
+                local lastEnemyCheck = tick()
 
                 local function getDistance(pos1, pos2)
                     return (pos1 - pos2).Magnitude
@@ -2412,12 +2446,40 @@ Tabs.dungeon:AddToggle("TeleportMobs", {
                     return true
                 end
 
+                local function recreateDungeon()
+                    print("[AUTO-RECREATE] Sem inimigos por muito tempo. Recriando dungeon...")
+                    
+                    -- Cancelar tween atual
+                    if currentTween then
+                        currentTween:Cancel()
+                        currentTween = nil
+                    end
+                    
+                    -- Recriar dungeon
+                    createDungeon()
+                    
+                    -- Resetar timer
+                    noEnemiesTimer = 0
+                    lastEnemyCheck = tick()
+                    
+                    task.wait(5) -- Aguardar a dungeon ser totalmente criada
+                end
+
                 local function monitorEnemies()
+                    print("[AUTO-FARM] Iniciando auto farm com recriação automática...")
+                    
                     while teleportEnabled do
                         pcall(function() -- Proteção contra erros
                             local closestEnemy = getClosestEnemy()
+                            local currentTime = tick()
                             
                             if closestEnemy then
+                                -- Resetar timer quando encontrar inimigos
+                                noEnemiesTimer = 0
+                                lastEnemyCheck = currentTime
+                                
+                                print("[AUTO-FARM] Movendo para inimigo:", closestEnemy.Name)
+                                
                                 -- Mover para o inimigo
                                 if moveToEnemy(closestEnemy) then
                                     -- Aguardar até o inimigo morrer ou desaparecer
@@ -2429,10 +2491,25 @@ Tabs.dungeon:AddToggle("TeleportMobs", {
                                         task.wait(0.1)
                                         attempts = attempts + 1
                                     end
+                                    
+                                    print("[AUTO-FARM] Inimigo eliminado!")
                                 end
                             else
-                                -- Se não há inimigos, aguardar um pouco antes de verificar novamente
-                                task.wait(1)
+                                -- Contar tempo sem inimigos
+                                local timeWithoutEnemies = currentTime - lastEnemyCheck
+                                
+                                if timeWithoutEnemies >= maxTimeWithoutEnemies then
+                                    recreateDungeon()
+                                else
+                                    -- Mostrar progresso do timer
+                                    local remainingTime = maxTimeWithoutEnemies - timeWithoutEnemies
+                                    if math.floor(remainingTime) % 5 == 0 then -- Mostrar a cada 5 segundos
+                                        print(string.format("[AUTO-FARM] Sem inimigos há %.1fs. Recriando em %.1fs...", 
+                                            timeWithoutEnemies, remainingTime))
+                                    end
+                                end
+                                
+                                task.wait(1) -- Aguardar 1 segundo quando não há inimigos
                             end
                         end)
                         
@@ -2444,6 +2521,8 @@ Tabs.dungeon:AddToggle("TeleportMobs", {
                         currentTween:Cancel()
                         currentTween = nil
                     end
+                    
+                    print("[AUTO-FARM] Auto farm desativado.")
                 end
 
                 monitorEnemies()
@@ -2457,4 +2536,3 @@ Tabs.dungeon:AddToggle("TeleportMobs", {
         end
     end
 })
-
