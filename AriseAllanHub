@@ -3053,16 +3053,75 @@ end
 
 
 -- ============================
--- Auto Castle (Join + Farm + Leave)
+-- Auto Castle (Join + Farm + Loop com Exit Floor)
 -- ============================
 
 castleEnabled = false
 local castleSessionActive = false
 
--- Farm simples: só procurar e matar mobs
+-- Configuração do andar de saída (padrão 101)
+ConfigSystem.DefaultConfig.CastleExitFloor = ConfigSystem.DefaultConfig.CastleExitFloor or 101
+ConfigSystem.CurrentConfig.CastleExitFloor = ConfigSystem.CurrentConfig.CastleExitFloor or ConfigSystem.DefaultConfig.CastleExitFloor
+local exitFloor = ConfigSystem.CurrentConfig.CastleExitFloor
+
+Tabs.dungeon:AddInput("CastleExitFloor", {
+    Title = "Castle Exit Floor",
+    Default = tostring(exitFloor),
+    Placeholder = "Andar para sair",
+    Numeric = true,
+    Finished = true,
+    Callback = function(value)
+        local floor = tonumber(value)
+        if floor and floor > 0 then
+            exitFloor = floor
+            ConfigSystem.CurrentConfig.CastleExitFloor = floor
+            ConfigSystem.SaveConfig()
+        end
+    end
+})
+
+-- Loop do farm + saída no andar escolhido e reentrada
 function autoCastle()
     task.spawn(function()
         while castleEnabled do
+            -- Verificar andar atual (ajuste para sua estrutura de dados)
+            local currentFloor = game:GetService("Players").LocalPlayer:FindFirstChild("Data") 
+                and game:GetService("Players").LocalPlayer.Data:FindFirstChild("CastleFloor")
+            if currentFloor and tonumber(currentFloor.Value) >= exitFloor then
+                -- Sai do Castle
+                local leaveArgs = {
+                    [1] = {
+                        [1] = { ["Event"] = "LeaveDungeon" },
+                        [2] = "\12"
+                    }
+                }
+                pcall(function() remote:FireServer(unpack(leaveArgs)) end)
+
+                Fluent:Notify({
+                    Title = "Castle",
+                    Content = "Saiu no andar " .. tostring(exitFloor) .. ", reiniciando...",
+                    Duration = 3
+                })
+
+                task.wait(3)
+
+                -- Entrar novamente no andar inicial
+                local joinArgs = {
+                    [1] = {
+                        [1] = {
+                            ["Check"] = true,
+                            ["Floor"] = tostring(ConfigSystem.CurrentConfig.EntryFloor or 1),
+                            ["Event"] = "CastleAction",
+                            ["Action"] = "Join"
+                        },
+                        [2] = "\12"
+                    }
+                }
+                pcall(function() remote:FireServer(unpack(joinArgs)) end)
+                task.wait(2)
+            end
+
+            -- Farm normal de mobs
             local mobsFolder = workspace:FindFirstChild("Enemies") or workspace:FindFirstChild("Mobs")
             if mobsFolder then
                 for _, mob in pairs(mobsFolder:GetChildren()) do
@@ -3081,27 +3140,11 @@ function autoCastle()
                     end
                 end
             end
+
             task.wait(0.4)
         end
     end)
 end
-
--- Input para escolher andar
-Tabs.dungeon:AddInput("CastleEntryFloor", {
-    Title = "Castle Floor",
-    Default = tostring(ConfigSystem.CurrentConfig.EntryFloor or 1),
-    Placeholder = "Digite o andar",
-    Numeric = true,
-    Finished = true,
-    Callback = function(value)
-        local floor = tonumber(value)
-        if floor and floor > 0 then
-            ConfigSystem.CurrentConfig.EntryFloor = floor
-            ConfigSystem.SaveConfig()
-            entryFloor = floor
-        end
-    end
-})
 
 -- Toggle Auto Castle
 Tabs.dungeon:AddToggle("CastleToggle", {
@@ -3135,7 +3178,7 @@ Tabs.dungeon:AddToggle("CastleToggle", {
                 pcall(function()
                     Fluent:Notify({
                         Title = "Castle Ativado",
-                        Content = "Infernal Castle iniciado no andar " .. tostring(ConfigSystem.CurrentConfig.EntryFloor or 1),
+                        Content = "Castle iniciado no andar " .. tostring(ConfigSystem.CurrentConfig.EntryFloor or 1) .. " (sairá no " .. tostring(exitFloor) .. ")",
                         Duration = 3
                     })
                 end)
@@ -3155,7 +3198,7 @@ Tabs.dungeon:AddToggle("CastleToggle", {
             pcall(function()
                 Fluent:Notify({
                     Title = "Castle Desativado",
-                    Content = "Saiu do Castle Infernal.",
+                    Content = "Saiu do Castle.",
                     Duration = 3
                 })
             end)
