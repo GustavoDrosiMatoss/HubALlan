@@ -1,4 +1,4 @@
--- Allan Hub Arise - Auto Dungeon + Auto Castelo + Agendamento
+-- Allan Hub Arise - Auto Dungeon + Auto Castelo integrados
 -- Configuração persistente em allan_hub_config.json
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -23,24 +23,10 @@ else
 end
 local function salvarConfig() writefile(configFile,HttpService:JSONEncode(config)) end
 
--- 🔹 Auto Dungeon
+-- 🔹 Auto Dungeon (aba já existe no Allan Hub: Tabs.dungeon)
 local ativarDungeon = config.AutoDungeon
-local tabDungeon = Window:AddTab({
-    Title = "Auto Dungeon",
-    Icon = "swords"
-})
-local function sairDungeon()
-    local args = { [1] = { [1] = { ["Check"]=true,["Event"]="DungeonAction",["Action"]="LeaveDungeon"},[2]="\\12"}}
-    remote:FireServer(unpack(args))
-    print("❌ Saindo da Dungeon...")
-end
-local function atacarMobsDungeon()
-    while ativarDungeon do
-        print("⚔️ Farmando mobs da dungeon...")
-        task.wait(1)
-    end
-end
-tabDungeon:AddToggle("ToggleAutoDungeon", {
+
+Tabs.dungeon:AddToggle("ToggleAutoDungeon", {
     Title = "Auto Dungeon",
     Default = config.AutoDungeon,
     Callback = function(state)
@@ -49,29 +35,48 @@ tabDungeon:AddToggle("ToggleAutoDungeon", {
         ativarDungeon = state
         if state then
             print("⚔️ Auto Dungeon ativado!")
-            task.spawn(atacarMobsDungeon)
+            task.spawn(function()
+                while ativarDungeon do
+                    print("⚔️ Farmando mobs da dungeon...")
+                    task.wait(1)
+                end
+            end)
         else
             print("❌ Auto Dungeon desativado!")
         end
     end
 })
-if config.AutoDungeon then task.spawn(atacarMobsDungeon) end
+if config.AutoDungeon then
+    task.spawn(function()
+        while ativarDungeon do
+            print("⚔️ Farmando mobs da dungeon...")
+            task.wait(1)
+        end
+    end)
+end
 
--- 🔥 Auto Castelo (aba separada)
+-- 🔥 Criar aba separada: Auto Castelo
 local ativarCastelo = config.AutoCastelo
 local ativarAutoLeave = config.AutoLeave
 local andarEntrada = config.AndarEntrada
 local andarSaida = config.AndarSaida
 local currentFloor = 0
-local tabCastelo = Window:AddTab({
-    Title = "Auto Castelo",
+
+Tabs.castelo = Window:AddTab({
+    Title = "Castelo",
     Icon = "home"
 })
+
 -- Dropdowns
-local valsEntrada,valsSaida={},{} for i=10,110,10 do table.insert(valsEntrada,tostring(i)) end for i=1,117 do table.insert(valsSaida,tostring(i)) end
-tabCastelo:AddDropdown("AndarEntrada",{Title="Andar Entrada",Values=valsEntrada,Default=tostring(andarEntrada),Callback=function(v)andarEntrada=tonumber(v)config.AndarEntrada=andarEntrada salvarConfig()end})
-tabCastelo:AddDropdown("AndarSaida",{Title="Andar Saída",Values=valsSaida,Default=tostring(andarSaida),Callback=function(v)andarSaida=tonumber(v)config.AndarSaida=andarSaida salvarConfig()end})
-tabCastelo:AddToggle("ToggleAutoLeave",{Title="Auto Leave",Default=ativarAutoLeave,Callback=function(state)ativarAutoLeave=state config.AutoLeave=state salvarConfig()end})
+local valsEntrada,valsSaida={},{} 
+for i=10,110,10 do table.insert(valsEntrada,tostring(i)) end 
+for i=1,117 do table.insert(valsSaida,tostring(i)) end
+
+Tabs.castelo:AddDropdown("AndarEntrada",{Title="Andar Entrada",Values=valsEntrada,Default=tostring(andarEntrada),Callback=function(v)andarEntrada=tonumber(v)config.AndarEntrada=andarEntrada salvarConfig()end})
+Tabs.castelo:AddDropdown("AndarSaida",{Title="Andar Saída",Values=valsSaida,Default=tostring(andarSaida),Callback=function(v)andarSaida=tonumber(v)config.AndarSaida=andarSaida salvarConfig()end})
+
+Tabs.castelo:AddToggle("ToggleAutoLeave",{Title="Auto Leave",Default=ativarAutoLeave,Callback=function(state)ativarAutoLeave=state config.AutoLeave=state salvarConfig()end})
+
 -- Funções Castelo
 local function entrarCastelo()
     local args = { [1] = { [1] = { ["Check"]=true,["Floor"]=tostring(andarEntrada),["Event"]="CastleAction",["Action"]="Join"},[2]="\\12"}}
@@ -89,6 +94,7 @@ local function atacarMobsCastelo()
         task.wait(1)
     end
 end
+
 -- Monitorar andar e auto leave
 remote.OnClientEvent:Connect(function(data)
     if typeof(data)=="table" and data[1] and data[1]["Event"]=="PortalAction" then
@@ -96,16 +102,19 @@ remote.OnClientEvent:Connect(function(data)
         if andar then currentFloor=andar if ativarCastelo and ativarAutoLeave and andar==andarSaida then sairCastelo() end end
     end
 end)
+
 -- Toggle Auto Castelo
-tabCastelo:AddToggle("ToggleAutoCastelo",{Title="Auto Castelo",Default=ativarCastelo,Callback=function(state)ativarCastelo=state config.AutoCastelo=state salvarConfig() if state then entrarCastelo() task.spawn(atacarMobsCastelo) end end})
+Tabs.castelo:AddToggle("ToggleAutoCastelo",{Title="Auto Castelo",Default=ativarCastelo,Callback=function(state)ativarCastelo=state config.AutoCastelo=state salvarConfig() if state then entrarCastelo() task.spawn(atacarMobsCastelo) else print("🛑 Auto Castelo desativado!") end end})
 if config.AutoCastelo then entrarCastelo() task.spawn(atacarMobsCastelo) end
 
--- 🕒 Schedule
+-- 🕒 Schedule: alternar dungeon/castelo nos horários certos
 local function dentroIntervaloCastelo() local m=os.date("*t").min return (m>=15 and m<=30) or (m>=45 and m<=57) end
 task.spawn(function()
     while true do
         if dentroIntervaloCastelo() and ativarDungeon then
-            sairDungeon()
+            local args = { [1] = { [1] = { ["Check"]=true,["Event"]="DungeonAction",["Action"]="LeaveDungeon"},[2]="\\12"}}
+            remote:FireServer(unpack(args))
+            print("⏸️ Dungeon pausada - horário de Castelo")
             ativarDungeon=false
             if config.AutoCastelo then entrarCastelo() task.spawn(atacarMobsCastelo) end
         end
