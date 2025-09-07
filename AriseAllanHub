@@ -13,6 +13,32 @@ local hrp = character:WaitForChild("HumanoidRootPart")
 local enemiesFolder = workspace:WaitForChild("__Main"):WaitForChild("__Enemies"):WaitForChild("Client")
 local remote = ReplicatedStorage:WaitForChild("BridgeNet2"):WaitForChild("dataRemoteEvent")
 
+-- Config persistence for Allan Hub (added by script)
+local HttpService = HttpService or game:GetService("HttpService")
+local configFile = "allan_hub_config.json"
+local config = {}
+if type(isfile) == "function" and isfile(configFile) then
+    local ok, data = pcall(function() return readfile(configFile) end)
+    if ok and data then
+        local suc, dec = pcall(function() return HttpService:JSONDecode(data) end)
+        if suc and dec then config = dec end
+    end
+else
+    config = {}
+end
+local function salvarConfig()
+    if type(writefile) == "function" then
+        pcall(function() writefile(configFile, HttpService:JSONEncode(config)) end)
+    end
+end
+-- ensure default values
+config.AutoDungeon = config.AutoDungeon or false
+config.AutoCastelo = config.AutoCastelo or false
+config.AutoLeave = config.AutoLeave or false
+config.AndarEntrada = config.AndarEntrada or 10
+config.AndarSaida = config.AndarSaida or 1
+
+
 local teleportEnabled = false
 local killedNPCs = {}
 local dungeonkill = {}
@@ -482,7 +508,8 @@ local Tabs = {
     tp = Window:AddTab({ Title = "Teleports", Icon = "" }),
     mount = Window:AddTab({ Title = "Mount Location/farm", Icon = "" }),
     dungeon = Window:AddTab({ Title = "Dungeon ", Icon = "" }),
-    shop = Window:AddTab({ Title = "Shop", Icon = "" }),
+        castelo = Window:AddTab({ Title = "Castelo Infernal", Icon = "home" }),
+shop = Window:AddTab({ Title = "Shop", Icon = "" }),
     Player = Window:AddTab({ Title = "Player", Icon = "" }),
     Settings = Window:AddTab({ Title = "Settings", Icon = "settings" })
 }
@@ -901,6 +928,75 @@ Tabs.Main:AddToggle("AutoArise", {
     end
 })
 
+
+-- ============ Auto Castelo Infernal UI ============
+do
+    local andarEntrada = config.AndarEntrada or 10
+    local andarSaida = config.AndarSaida or 1
+    local ativarCastelo = config.AutoCastelo or false
+    local ativarAutoLeave = config.AutoLeave or false
+    local currentFloor = 0
+
+    local andaresEntrada = {}
+    for i = 10, 110, 10 do table.insert(andaresEntrada, tostring(i)) end
+
+    local andaresSaida = {}
+    for i = 1, 117 do table.insert(andaresSaida, tostring(i)) end
+
+    Tabs.castelo:AddDropdown("AndarEntrada", {
+        Title = "Selecionar Andar de Entrada",
+        Values = andaresEntrada,
+        Default = tostring(andarEntrada),
+        Callback = function(value)
+            andarEntrada = tonumber(value)
+            config.AndarEntrada = andarEntrada
+            salvarConfig()
+            print("Castelo: Andar de entrada selecionado -> " .. andarEntrada)
+        end
+    })
+
+    Tabs.castelo:AddDropdown("AndarSaida", {
+        Title = "Selecionar Andar de Saída",
+        Values = andaresSaida,
+        Default = tostring(andarSaida),
+        Callback = function(value)
+            andarSaida = tonumber(value)
+            config.AndarSaida = andarSaida
+            salvarConfig()
+            print("Castelo: Andar de saída selecionado -> " .. andarSaida)
+        end
+    })
+
+    Tabs.castelo:AddToggle("ToggleAutoLeave", {
+        Title = "Auto Leave Castelo",
+        Default = ativarAutoLeave,
+        Callback = function(state)
+            ativarAutoLeave = state
+            config.AutoLeave = state
+            salvarConfig()
+            print("Castelo: Auto Leave " .. (state and "ativado" or "desativado"))
+        end
+    })
+
+    Tabs.castelo:AddToggle("ToggleAutoCastelo", {
+        Title = "Auto Castelo Infernal",
+        Default = ativarCastelo,
+        Callback = function(state)
+            ativarCastelo = state
+            config.AutoCastelo = state
+            salvarConfig()
+            if state then
+                print("🔥 Auto Castelo ativado!")
+                -- entrarCastelo function defined below will handle entry
+                if type(enterCastelo) == "function" then pcall(enterCastelo) end
+                if type(atacarMobsCastelo) == "function" then task.spawn(atacarMobsCastelo) end
+            else
+                print("🛑 Auto Castelo desativado!")
+            end
+        end
+    })
+end
+-- ================================================
 Tabs.dungeon:AddToggle("AutoDestroy", {
     Title = "Auto Destroy",
     Default = false,
@@ -2374,6 +2470,213 @@ local function createDungeon()
 end
 
 -- Toggle com recriação automática de dungeon
+
+-- startDungeonFarm helper (replicates Toggle behavior)
+local function startDungeonFarm()
+    teleportEnabled = true
+    task.spawn(function()
+                local tweenService = game:GetService("TweenService")
+                local player = game.Players.LocalPlayer
+                local enemiesFolder = workspace.__Main.__Enemies.Server
+                local currentTween = nil
+                local noEnemiesTimer = 0 -- Timer para contar tempo sem inimigos
+                local maxTimeWithoutEnemies = 30 -- 30 segundos sem inimigos antes de recriar
+                local lastEnemyCheck = tick()
+
+                local function getDistance(pos1, pos2)
+                    return (pos1 - pos2).Magnitude
+                end
+
+                local function getClosestEnemy()
+                    local closestEnemy = nil
+                    local closestDistance = math.huge
+                    local playerCharacter = player.Character
+
+                    if not playerCharacter or not playerCharacter:FindFirstChild("HumanoidRootPart") then 
+                        return nil 
+                    end
+                    local playerPosition = playerCharacter.HumanoidRootPart.Position
+
+                    for _, enemy in pairs(enemiesFolder:GetChildren()) do
+                        local hp = enemy:GetAttribute("HP")
+                        if hp and hp > 0 and enemy.Position then
+                            local distance = getDistance(playerPosition, enemy.Position)
+                            if distance < closestDistance then
+                                closestDistance = distance
+                                closestEnemy = enemy
+                            end
+                        end
+                    end
+
+                    return closestEnemy
+                end
+
+                local function moveToEnemy(enemy)
+                    local playerCharacter = player.Character
+                    if not playerCharacter or not playerCharacter:FindFirstChild("HumanoidRootPart") or not enemy.Position then
+                        return false
+                    end
+
+                    -- Cancelar tween anterior se existir
+                    if currentTween then
+                        currentTween:Cancel()
+                    end
+
+                    playerCharacter.PrimaryPart = playerCharacter.HumanoidRootPart
+                    playerCharacter.HumanoidRootPart.Anchored = false
+
+                    local tweenInfo = TweenInfo.new(0.5, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
+                    currentTween = tweenService:Create(playerCharacter.PrimaryPart, tweenInfo, {CFrame = enemy.CFrame})
+                    
+                    currentTween:Play()
+                    
+                    -- Usar spawn para não bloquear o loop principal
+                    task.spawn(function()
+                        currentTween.Completed:Wait()
+                        currentTween = nil
+                    end)
+                    
+                    return true
+                end
+
+                local function recreateDungeon()
+                    print("[AUTO-RECREATE] Sem inimigos por muito tempo. Recriando dungeon...")
+                    
+                    -- Cancelar tween atual
+                    if currentTween then
+                        currentTween:Cancel()
+                        currentTween = nil
+                    end
+                    
+                    -- Recriar dungeon
+                    createDungeon()
+                    
+                    -- Resetar timer
+                    noEnemiesTimer = 0
+                    lastEnemyCheck = tick()
+                    
+                    task.wait(5) -- Aguardar a dungeon ser totalmente criada
+                end
+
+                local function monitorEnemies()
+                    print("[AUTO-FARM] Iniciando auto farm com recriação automática...")
+                    
+                    while teleportEnabled do
+                        pcall(function() -- Proteção contra erros
+                            local closestEnemy = getClosestEnemy()
+                            local currentTime = tick()
+                            
+                            if closestEnemy then
+                                -- Resetar timer quando encontrar inimigos
+                                noEnemiesTimer = 0
+                                lastEnemyCheck = currentTime
+                                
+                                print("[AUTO-FARM] Movendo para inimigo:", closestEnemy.Name)
+                                
+                                -- Mover para o inimigo
+                                if moveToEnemy(closestEnemy) then
+                                    -- Aguardar até o inimigo morrer ou desaparecer
+                                    local attempts = 0
+                                    while teleportEnabled and closestEnemy.Parent and 
+                                          closestEnemy:GetAttribute("HP") and 
+                                          closestEnemy:GetAttribute("HP") > 0 and
+                                          attempts < 100 do -- Limite de tentativas para evitar loop infinito
+                                        task.wait(0.1)
+                                        attempts = attempts + 1
+                                    end
+                                    
+                                    print("[AUTO-FARM] Inimigo eliminado!")
+                                end
+                            else
+                                -- Contar tempo sem inimigos
+                                local timeWithoutEnemies = currentTime - lastEnemyCheck
+                                
+                                if timeWithoutEnemies >= maxTimeWithoutEnemies then
+                                    recreateDungeon()
+                                else
+                                    -- Mostrar progresso do timer
+                                    local remainingTime = maxTimeWithoutEnemies - timeWithoutEnemies
+                                    if math.floor(remainingTime) % 5 == 0 then -- Mostrar a cada 5 segundos
+                                        print(string.format("[AUTO-FARM] Sem inimigos há %.1fs. Recriando em %.1fs...", 
+                                            timeWithoutEnemies, remainingTime))
+                                    end
+                                end
+                                
+                                task.wait(1) -- Aguardar 1 segundo quando não há inimigos
+                            end
+                        end)
+                        
+                        task.wait(0.1) -- Pequeno delay entre verificações
+                    end
+                    
+                    -- Cancelar tween ao desativar
+                    if currentTween then
+                        currentTween:Cancel()
+                        currentTween = nil
+                    end
+                    
+                    print("[AUTO-FARM] Auto farm desativado.")
+                end
+
+                monitorEnemies()
+                end)
+end
+
+
+-- ========== Schedule: Pausar Dungeon e ativar Castelo em horários =========
+do
+    task.spawn(function()
+        local pausedBySchedule = false
+        local prevTeleportState = false
+
+        local function dentroIntervaloCastelo()
+            local m = os.date("*t").min
+            return (m >= 15 and m <= 30) or (m >= 45 and m <= 57)
+        end
+
+        while true do
+            pcall(function()
+                if dentroIntervaloCastelo() then
+                    if teleportEnabled then
+                        prevTeleportState = teleportEnabled
+                        teleportEnabled = false
+                        pausedBySchedule = true
+
+                        -- Sair da dungeon
+                        local args = { [1] = { [1] = { ["Check"] = true, ["Event"] = "DungeonAction", ["Action"] = "LeaveDungeon" }, [2] = "\12" } }
+                        remote:FireServer(unpack(args))
+                        print("⏸️ Schedule: Dungeon pausada para Castelo Infernal.")
+
+                        -- Ativar Castelo se configurado
+                        if config.AutoCastelo then
+                            if type(enterCastelo) == "function" then pcall(enterCastelo) end
+                            if type(atacarMobsCastelo) == "function" then
+                                ativarCastelo = true
+                                task.spawn(atacarMobsCastelo)
+                            end
+                        end
+                    end
+                else
+                    if pausedBySchedule then
+                        -- Restaurar dungeon se estava ativa antes
+                        if prevTeleportState then
+                            -- startDungeonFarm replicates the original toggle's spawn
+                            if type(startDungeonFarm) == "function" then
+                                startDungeonFarm()
+                            else
+                                teleportEnabled = true
+                            end
+                        end
+                        pausedBySchedule = false
+                        print("▶️ Schedule: Intervalo de Castelo encerrado. Dungeon restaurada:", tostring(prevTeleportState))
+                    end
+                end
+            end)
+            task.wait(5)
+        end
+    end)
+end
+-- =======================================================================
 Tabs.dungeon:AddToggle("TeleportMobs", {
     Title = "Auto farm Dungeon",
     Default = false,
@@ -2536,131 +2839,3 @@ Tabs.dungeon:AddToggle("TeleportMobs", {
         end
     end
 })
-
--- ================== Auto Castelo Infernal ==================
-do
-    local andarEntrada = config.AndarEntrada or 10
-    local andarSaida = config.AndarSaida or 1
-    local ativarCastelo = config.AutoCastelo or false
-    local ativarAutoLeave = config.AutoLeave or false
-    local currentFloor = 0
-
-    local andaresEntrada = {}
-    for i = 10, 110, 10 do table.insert(andaresEntrada, tostring(i)) end
-
-    local andaresSaida = {}
-    for i = 1, 117 do table.insert(andaresSaida, tostring(i)) end
-
-    -- Funções Castelo
-    local function entrarCastelo()
-        local args = {
-            [1] = {
-                [1] = {
-                    ["Check"] = true,
-                    ["Floor"] = tostring(andarEntrada),
-                    ["Event"] = "CastleAction",
-                    ["Action"] = "Join"
-                },
-                [2] = "\\12"
-            }
-        }
-        remote:FireServer(unpack(args))
-        print("✅ Entrando no andar " .. andarEntrada)
-    end
-
-    local function sairCastelo()
-        local args = {
-            [1] = {
-                [1] = {
-                    ["Check"] = true,
-                    ["Floor"] = tostring(andarSaida),
-                    ["Event"] = "CastleAction",
-                    ["Action"] = "LeaveDungeon"
-                },
-                [2] = "\\12"
-            }
-        }
-        remote:FireServer(unpack(args))
-        print("❌ Saindo no andar " .. andarSaida)
-    end
-
-    local function atacarMobsCastelo()
-        while ativarCastelo do
-            print("⚔️ Farmando mobs do castelo...")
-            task.wait(1)
-        end
-    end
-
-    -- UI Castelo
-    Tabs.castelo:AddDropdown("AndarEntrada", {
-        Title = "Selecionar Andar de Entrada",
-        Values = andaresEntrada,
-        Default = tostring(andarEntrada),
-        Callback = function(value)
-            andarEntrada = tonumber(value)
-            config.AndarEntrada = andarEntrada
-            salvarConfig()
-            print("Castelo: Andar de entrada selecionado -> " .. andarEntrada)
-        end
-    })
-
-    Tabs.castelo:AddDropdown("AndarSaida", {
-        Title = "Selecionar Andar de Saída",
-        Values = andaresSaida,
-        Default = tostring(andarSaida),
-        Callback = function(value)
-            andarSaida = tonumber(value)
-            config.AndarSaida = andarSaida
-            salvarConfig()
-            print("Castelo: Andar de saída selecionado -> " .. andarSaida)
-        end
-    })
-
-    Tabs.castelo:AddToggle("ToggleAutoLeave", {
-        Title = "Auto Leave Castelo",
-        Default = ativarAutoLeave,
-        Callback = function(state)
-            ativarAutoLeave = state
-            config.AutoLeave = state
-            salvarConfig()
-            print("Castelo: Auto Leave " .. (state and "ativado" or "desativado"))
-        end
-    })
-
-    Tabs.castelo:AddToggle("ToggleAutoCastelo", {
-        Title = "Auto Castelo Infernal",
-        Default = ativarCastelo,
-        Callback = function(state)
-            ativarCastelo = state
-            config.AutoCastelo = state
-            salvarConfig()
-            if state then
-                print("🔥 Auto Castelo ativado!")
-                entrarCastelo()
-                task.spawn(atacarMobsCastelo)
-            else
-                print("🛑 Auto Castelo desativado!")
-            end
-        end
-    })
-
-    -- Monitora evento de andar atual e aplica AutoLeave
-    remote.OnClientEvent:Connect(function(data)
-        if typeof(data)=="table" and data[1] and data[1]["Event"]=="PortalAction" then
-            local andar = tonumber(data[1]["Floor"])
-            if andar then
-                currentFloor = andar
-                print("📍 Castelo: Andar atual -> " .. currentFloor)
-                if ativarCastelo and ativarAutoLeave and andar==andarSaida then
-                    sairCastelo()
-                end
-            end
-        end
-    end)
-
-    if config.AutoCastelo then
-        entrarCastelo()
-        task.spawn(atacarMobsCastelo)
-    end
-end
--- ============================================================
