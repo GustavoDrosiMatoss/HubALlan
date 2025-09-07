@@ -1,7 +1,4 @@
-if not game or not game.GetService then
-    warn("Ambiente do jogo não está disponível.")
-    return
-end
+-- guard removed by assistant
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
