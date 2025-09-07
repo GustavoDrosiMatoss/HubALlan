@@ -1,9 +1,15 @@
--- Allan Hub Arise + Auto Castelo + Sistema de Configuração
--- 🔥 Agora com salvamento automático de todas as opções em allan_hub_config.json
+-- Allan Hub Arise + Auto Castelo Final
+-- 🔥 Inclui:
+--  - Sistema de configuração persistente (allan_hub_config.json)
+--  - Auto Castelo com farm de mobs
+--  - Auto Leave somente no andar configurado
+--  - Uso automático do FirePortal para subir de andar
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local remote = ReplicatedStorage:WaitForChild("BridgeNet2"):WaitForChild("dataRemoteEvent")
 local HttpService = game:GetService("HttpService")
+local Players = game:GetService("Players")
+local player = Players.LocalPlayer
 
 -- 📁 Sistema de Configuração Global
 local configFile = "allan_hub_config.json"
@@ -84,6 +90,49 @@ t:AddToggle("ToggleAutoLeave", {
     end
 })
 
+-- Função para usar FirePortal e subir para o próximo andar
+local function usarFirePortal()
+    local char = player.Character or player.CharacterAdded:Wait()
+    local hrp = char:WaitForChild("HumanoidRootPart")
+
+    local portal = nil
+    local main = workspace:WaitForChild("__Main")
+    local world = main:WaitForChild("__World")
+
+    for i = 1, 200 do
+        local room = world:FindFirstChild("Room_" .. i)
+        if room then
+            local foundPortal = room:FindFirstChild("FirePortal")
+            if foundPortal then
+                portal = foundPortal
+                currentFloor = i
+                print("📍 ANDAR ATUAL: " .. i)
+                break
+            end
+        end
+    end
+
+    if not portal then
+        warn("⚠️ FirePortal não encontrado!")
+        return
+    end
+
+    hrp.CFrame = portal.CFrame
+    hrp.Velocity = Vector3.zero
+    task.wait(0.1)
+
+    local prompt = portal:FindFirstChildOfClass("ProximityPrompt") or portal:FindFirstChildWhichIsA("ProximityPrompt", true)
+    if prompt then
+        for i = 1, 3 do
+            fireproximityprompt(prompt)
+            task.wait(0.05)
+        end
+        print("🚀 Subindo para o próximo andar!")
+    else
+        warn("⚠️ ProximityPrompt não encontrado no portal!")
+    end
+end
+
 -- Função entrar Castelo
 local function entrarCastelo()
     local args = {
@@ -146,7 +195,7 @@ local function atacarMobsCastelo()
     end
 end
 
--- Monitorar andar atual
+-- Monitorar andar atual e sair no andar configurado
 local function monitorarAndar()
     ReplicatedStorage:WaitForChild("BridgeNet2"):WaitForChild("dataRemoteEvent").OnClientEvent:Connect(function(data)
         if typeof(data) == "table" and data[1] and data[1]["Event"] == "PortalAction" then
@@ -154,7 +203,7 @@ local function monitorarAndar()
             if andar then
                 currentFloor = andar
                 print("📍 Andar atual: " .. currentFloor)
-                if ativarCastelo and ativarAutoLeave and currentFloor >= andarSaida then
+                if ativarCastelo and ativarAutoLeave and currentFloor == andarSaida then
                     sairCastelo()
                 end
             end
