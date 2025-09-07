@@ -3052,229 +3052,83 @@ end
 
 
 
--- ============================
--- Auto Castle (BridgeNet2)
--- ============================
+-- =========================================
+-- Castle Portal Climber (Nearest NPC + FirePortal)
+-- =========================================
 
-castleEnabled = false
-local castleSessionActive = false
+castleClimbEnabled = false
 
--- Configuração do andar de saída (padrão 101)
-ConfigSystem.DefaultConfig.CastleExitFloor = ConfigSystem.DefaultConfig.CastleExitFloor or 101
-ConfigSystem.CurrentConfig.CastleExitFloor = ConfigSystem.CurrentConfig.CastleExitFloor or ConfigSystem.DefaultConfig.CastleExitFloor
-local exitFloor = ConfigSystem.CurrentConfig.CastleExitFloor
+-- Função para pegar mob mais próximo
+local function getNearestMob()
+    local plr = game.Players.LocalPlayer
+    if not plr.Character or not plr.Character:FindFirstChild("HumanoidRootPart") then return nil end
+    local hrp = plr.Character.HumanoidRootPart
 
-Tabs.dungeon:AddInput("CastleExitFloor", {
-    Title = "Castle Exit Floor",
-    Default = tostring(exitFloor),
-    Placeholder = "Andar para sair",
-    Numeric = true,
-    Finished = true,
-    Callback = function(value)
-        local floor = tonumber(value)
-        if floor and floor > 0 then
-            exitFloor = floor
-            ConfigSystem.CurrentConfig.CastleExitFloor = floor
-            ConfigSystem.SaveConfig()
+    local nearest, dist = nil, math.huge
+    local mobsFolder = workspace:FindFirstChild("Enemies") or workspace:FindFirstChild("Mobs")
+    if mobsFolder then
+        for _, mob in pairs(mobsFolder:GetChildren()) do
+            local mobHrp = mob:FindFirstChild("HumanoidRootPart")
+            local hum = mob:FindFirstChild("Humanoid")
+            if mobHrp and hum and hum.Health > 0 then
+                local d = (mobHrp.Position - hrp.Position).Magnitude
+                if d < dist then
+                    dist = d
+                    nearest = mob
+                end
+            end
         end
     end
-})
+    return nearest
+end
 
--- Detectar andar atual pelo Room
-local function getCurrentCastleFloor()
+-- Função para detectar FirePortal do andar atual
+local function getCurrentFirePortal()
     local main = workspace:FindFirstChild("__Main")
     if not main then return nil end
     local world = main:FindFirstChild("__World")
     if not world then return nil end
 
-    local current = nil
-    for i = 1, 200 do
-        if world:FindFirstChild("Room_" .. i) then
-            current = i
-        end
-    end
-    return current
-end
-
--- Loop do Auto Castle
-function autoCastle()
-    task.spawn(function()
-        while castleEnabled do
-            local currentFloor = getCurrentCastleFloor()
-            if currentFloor and currentFloor >= exitFloor then
-                -- LeaveDungeon com BridgeNet2
-                local leaveArgs = {
-                    [1] = {
-                        [1] = { ["Event"] = "LeaveDungeon" },
-                        [2] = "\12"
-                    }
-                }
-                pcall(function()
-                    game:GetService("ReplicatedStorage").BridgeNet2.dataRemoteEvent:FireServer(unpack(leaveArgs))
-                end)
-
-                Fluent:Notify({
-                    Title = "Castle",
-                    Content = "Saiu no andar " .. tostring(exitFloor) .. ", reiniciando...",
-                    Duration = 3
-                })
-
-                task.wait(3)
-
-                -- Join Castle com BridgeNet2
-                local joinArgs = {
-                    [1] = {
-                        [1] = {
-                            ["Check"] = true,
-                            ["Floor"] = tostring(ConfigSystem.CurrentConfig.EntryFloor or 1),
-                            ["Event"] = "CastleAction",
-                            ["Action"] = "Join"
-                        },
-                        [2] = "\12"
-                    }
-                }
-                pcall(function()
-                    game:GetService("ReplicatedStorage").BridgeNet2.dataRemoteEvent:FireServer(unpack(joinArgs))
-                end)
-                task.wait(2)
-            end
-            task.wait(0.4)
-        end
-    end)
-end
-
-Tabs.dungeon:AddToggle("CastleToggle", {
-    Title = "Auto Castle",
-    Default = ConfigSystem.CurrentConfig.CastleToggle or false,
-    Callback = function(state)
-        castleEnabled = state
-        ConfigSystem.CurrentConfig.CastleToggle = state
-        ConfigSystem.SaveConfig()
-
-        if state then
-            task.spawn(function()
-                local joinArgs = {
-                    [1] = {
-                        [1] = {
-                            ["Check"] = true,
-                            ["Floor"] = tostring(ConfigSystem.CurrentConfig.EntryFloor or 1),
-                            ["Event"] = "CastleAction",
-                            ["Action"] = "Join"
-                        },
-                        [2] = "\12"
-                    }
-                }
-                pcall(function()
-                    game:GetService("ReplicatedStorage").BridgeNet2.dataRemoteEvent:FireServer(unpack(joinArgs))
-                end)
-                task.wait(1)
-
-                castleSessionActive = true
-                autoCastle()
-
-                pcall(function()
-                    Fluent:Notify({
-                        Title = "Castle Ativado",
-                        Content = "Castle iniciado no andar " .. tostring(ConfigSystem.CurrentConfig.EntryFloor or 1) .. " (sairá no " .. tostring(exitFloor) .. ")",
-                        Duration = 3
-                    })
-                end)
-            end)
-        else
-            if castleSessionActive then
-                local leaveArgs = {
-                    [1] = {
-                        [1] = { ["Event"] = "LeaveDungeon" },
-                        [2] = "\12"
-                    }
-                }
-                pcall(function()
-                    game:GetService("ReplicatedStorage").BridgeNet2.dataRemoteEvent:FireServer(unpack(leaveArgs))
-                end)
-                castleSessionActive = false
-            end
-
-            pcall(function()
-                Fluent:Notify({
-                    Title = "Castle Desativado",
-                    Content = "Saiu do Castle.",
-                    Duration = 3
-                })
-            end)
-        end
-    end
-})
-
--- =========================================
--- Castle Portal Climber (TweenTo + Attack)
--- =========================================
-
-castleClimbEnabled = false
-
-local function getCurrentRoomAndPortal()
-    local main = workspace:FindFirstChild("__Main")
-    if not main then return nil, nil end
-    local world = main:FindFirstChild("__World")
-    if not world then return nil, nil end
-
-    local current, portal = nil, nil
-    for i = 1, 200 do
+    for i = 200, 1, -1 do
         local room = world:FindFirstChild("Room_" .. i)
-        if room then
-            current = i
-            if room:FindFirstChild("FirePortal") then
-                portal = room.FirePortal
-            end
+        if room and room:FindFirstChild("FirePortal") then
+            return room.FirePortal, i
         end
     end
-    return current, portal
+    return nil, nil
 end
 
+-- Loop do Castle Climber
 local function autoClimbCastle()
     task.spawn(function()
         while castleClimbEnabled do
-            local mobsFolder = workspace:FindFirstChild("Enemies") or workspace:FindFirstChild("Mobs")
-            local hasMob = false
-            if mobsFolder then
-                for _, mob in pairs(mobsFolder:GetChildren()) do
-                    if not castleClimbEnabled then break end
-                    local hrp = mob:FindFirstChild("HumanoidRootPart")
-                    local hum = mob:FindFirstChild("Humanoid")
-                    if hrp and hum and hum.Health > 0 then
-                        hasMob = true
-                        local plr = game.Players.LocalPlayer
-                        if plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
-                            -- Usar TweenTo igual Auto Dungeon
-                            TweenTo(hrp.CFrame * CFrame.new(0, 3, 0))
-                        end
-                        pcall(function()
-                            remote:FireServer("Attack", mob)
-                        end)
-                        task.wait(0.25)
-                    end
+            local mob = getNearestMob()
+            if mob then
+                local hrp = mob:FindFirstChild("HumanoidRootPart")
+                if hrp then
+                    -- Voar até mob mais próximo
+                    TweenTo(hrp.CFrame * CFrame.new(0, 3, 0))
                 end
-            end
-
-            if not hasMob then
-                local currentRoom, portal = getCurrentRoomAndPortal()
+                -- Atacar mob
+                pcall(function()
+                    remote:FireServer("Attack", mob)
+                end)
+            else
+                -- Sem mobs -> procurar FirePortal
+                local portal, floor = getCurrentFirePortal()
                 if portal then
-                    local plr = game.Players.LocalPlayer
-                    if plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
-                        -- Usar TweenTo para chegar no portal
-                        TweenTo(portal.CFrame * CFrame.new(0, 3, 0))
-                    end
+                    TweenTo(portal.CFrame * CFrame.new(0, 3, 0))
                     pcall(function()
                         fireproximityprompt(portal.ProximityPrompt)
                     end)
                     Fluent:Notify({
                         Title = "Castle Climber",
-                        Content = "Subindo para o próximo andar (" .. tostring((currentRoom or 0) + 1) .. ")",
+                        Content = "Subindo para o próximo andar (" .. tostring((floor or 0) + 1) .. ")",
                         Duration = 3
                     })
                     task.wait(3)
                 end
             end
-
             task.wait(0.5)
         end
     end)
