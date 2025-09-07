@@ -1,5 +1,5 @@
--- Allan Hub Arise + Auto Dungeon + Auto Castelo com Config Persistente
--- 🔥 Agora Auto Dungeon restaura automaticamente quando recarregar o script
+-- Allan Hub Arise + Auto Dungeon + Auto Castelo com Config Persistente e Agendamento de Horário
+-- 🔥 Agora Auto Dungeon pausa entre xx:15-xx:30 e xx:45-xx:57, sai da Dungeon e ativa Castelo se configurado
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local remote = ReplicatedStorage:WaitForChild("BridgeNet2"):WaitForChild("dataRemoteEvent")
@@ -27,7 +27,18 @@ local function salvarConfig()
     writefile(configFile, HttpService:JSONEncode(config))
 end
 
--- 🔹 AUTO DUNGEON (com restauração automática)
+-- 🔹 Função para verificar intervalo de Castelo
+local function dentroIntervaloCastelo()
+    local agora = os.date("*t")
+    local min = agora.min
+
+    if (min >= 15 and min <= 30) or (min >= 45 and min <= 57) then
+        return true
+    end
+    return false
+end
+
+-- 🔹 AUTO DUNGEON (com restauração automática + horário)
 local ativarDungeon = config.AutoDungeon
 
 local tabDungeon = Window:AddTab({
@@ -35,11 +46,37 @@ local tabDungeon = Window:AddTab({
     Icon = "swords"
 })
 
--- Função simulada de farm (trocar pela real do hub)
+local function sairDungeon()
+    local args = {
+        [1] = {
+            [1] = {
+                ["Check"] = true,
+                ["Event"] = "DungeonAction",
+                ["Action"] = "LeaveDungeon"
+            },
+            [2] = "\12"
+        }
+    }
+    remote:FireServer(unpack(args))
+    print("❌ Saindo da Dungeon...")
+end
+
 local function atacarMobsDungeon()
     while ativarDungeon do
-        print("⚔️ Farmando mobs da dungeon...")
-        task.wait(1)
+        if dentroIntervaloCastelo() then
+            print("⏸️ Pausando Auto Dungeon - horário reservado para Castelo")
+            sairDungeon()
+            if config.AutoCastelo then
+                ativarCastelo = true
+                entrarCastelo()
+                task.spawn(atacarMobsCastelo)
+            end
+            task.wait(10)
+        else
+            print("⚔️ Farmando mobs da dungeon...")
+            -- lógica de farm dungeon
+            task.wait(1)
+        end
     end
 end
 
@@ -60,7 +97,6 @@ tabDungeon:AddToggle("ToggleAutoDungeon", {
     end
 })
 
--- 🔥 Restaurar Auto Dungeon se estava ativo no config
 if config.AutoDungeon then
     ativarDungeon = true
     print("⚔️ Auto Dungeon restaurado ativo!")
@@ -169,7 +205,7 @@ local function usarFirePortal()
 end
 
 -- Função entrar Castelo
-local function entrarCastelo()
+function entrarCastelo()
     local args = {
         [1] = {
             [1] = {
@@ -202,8 +238,8 @@ local function sairCastelo()
     print("❌ Saindo no andar " .. andarSaida)
 end
 
--- Função farmar mobs
-local function atacarMobsCastelo()
+-- Função farmar mobs Castelo
+function atacarMobsCastelo()
     while ativarCastelo do
         local target = getNearestEnemy()
         if target and target.Parent then
@@ -266,7 +302,6 @@ t:AddToggle("ToggleAutoCastelo", {
     end
 })
 
--- 🔥 Restaurar Auto Castelo se estava ativo no config
 if config.AutoCastelo then
     ativarCastelo = true
     print("🔥 Auto Castelo restaurado ativo!")
