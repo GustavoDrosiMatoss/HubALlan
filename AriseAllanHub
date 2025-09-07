@@ -3053,7 +3053,7 @@ end
 
 
 -- ============================
--- Auto Castle (Join + Farm + Loop com Exit Floor)
+-- Auto Castle (com detecção via FirePortal)
 -- ============================
 
 castleEnabled = false
@@ -3080,14 +3080,29 @@ Tabs.dungeon:AddInput("CastleExitFloor", {
     end
 })
 
--- Loop do farm + saída no andar escolhido e reentrada
+-- Detectar andar atual usando FirePortal (sem teleportar)
+local function getCurrentCastleFloor()
+    local main = workspace:FindFirstChild("__Main")
+    if not main then return nil end
+    local world = main:FindFirstChild("__World")
+    if not world then return nil end
+
+    for i = 1, 200 do
+        local room = world:FindFirstChild("Room_" .. i)
+        if room and room:FindFirstChild("FirePortal") then
+            return i
+        end
+    end
+    return nil
+end
+
+-- Loop do Auto Castle
 function autoCastle()
     task.spawn(function()
         while castleEnabled do
-            -- Verificar andar atual (ajuste para sua estrutura de dados)
-            local currentFloor = game:GetService("Players").LocalPlayer:FindFirstChild("Data") 
-                and game:GetService("Players").LocalPlayer.Data:FindFirstChild("CastleFloor")
-            if currentFloor and tonumber(currentFloor.Value) >= exitFloor then
+            -- Detectar andar atual
+            local currentFloor = getCurrentCastleFloor()
+            if currentFloor and currentFloor >= exitFloor then
                 -- Sai do Castle
                 local leaveArgs = {
                     [1] = {
