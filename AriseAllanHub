@@ -3049,3 +3049,78 @@ do
     -- Troca a função usada pelo toggle para a versão acima
     autoCastle = autoCastle_mobs_first
 end
+
+
+
+-- ===============================================
+-- OVERRIDE SEGURO: Toggle Auto Castle
+-- -> Join Castle + Teleport + Ativar Fire Portal + Iniciar Farm
+-- ===============================================
+do
+    local oldToggle = Tabs.dungeon:AddToggle -- não sobrescreve, só adiciona outro
+    Tabs.dungeon:AddToggle("CastleToggleFull", {
+        Title = "Auto Castle (Completo)",
+        Default = ConfigSystem.CurrentConfig.CastleToggle or false,
+        Callback = function(state)
+            castleEnabled = state
+            ConfigSystem.CurrentConfig.CastleToggle = state
+            ConfigSystem.SaveConfig()
+
+            if state then
+                task.spawn(function()
+                    -- 1) Entrar no Castle Infernal
+                    local args = {
+                        [1] = {
+                            [1] = {
+                                ["Check"] = true,
+                                ["Floor"] = tostring(entryFloor),
+                                ["Event"] = "CastleAction",
+                                ["Action"] = "Join"
+                            },
+                            [2] = "\\12"
+                        }
+                    }
+                    pcall(function() remote:FireServer(unpack(args)) end)
+                    task.wait(1)
+
+                    -- 2) Teleportar e ativar Fire Portal
+                    local teleported = false
+                    local ok, ret = pcall(function()
+                        local tpd, floor = teleportToFirePortal()
+                        return tpd
+                    end)
+                    teleported = ok and ret
+                    if teleported then
+                        task.wait(0.5)
+                        pcall(activateFirePortal)
+                        task.wait(1)
+                    end
+
+                    -- 3) Iniciar farm de mobs
+                    autoCastle()
+
+                    Fluent:Notify({
+                        Title = "Castle Ativado",
+                        Content = "Infernal Castle iniciado no andar " .. tostring(entryFloor),
+                        Duration = 3
+                    })
+                end)
+            else
+                -- Sair do Castle
+                local leaveArgs = {
+                    [1] = {
+                        [1] = { ["Event"] = "LeaveDungeon" },
+                        [2] = "\\12"
+                    }
+                }
+                pcall(function() remote:FireServer(unpack(leaveArgs)) end)
+
+                Fluent:Notify({
+                    Title = "Castle Desativado",
+                    Content = "Saiu do Castle Infernal e parou Auto Castle.",
+                    Duration = 3
+                })
+            end
+        end
+    })
+end
