@@ -2809,7 +2809,7 @@ Tabs.dungeon:AddToggle("AutoCastle", {
 
 
 -- ===============================
--- Castle Entry Floor + Auto Castle Toggle (FINAL CLEAN)
+-- Castle Entry Floor + Auto Castle Toggle (com Join)
 -- ===============================
 
 local castleEnabled = false
@@ -2848,6 +2848,21 @@ Tabs.dungeon:AddToggle("CastleToggle", {
         castleEnabled = state
         if state then
             task.spawn(function()
+                -- Enviar remote para entrar no Castle no andar escolhido
+                local args = {
+                    [1] = {
+                        [1] = {
+                            ["Check"] = true,
+                            ["Floor"] = tostring(entryFloor),
+                            ["Event"] = "CastleAction",
+                            ["Action"] = "Join"
+                        },
+                        [2] = "\12"
+                    }
+                }
+                remote:FireServer(unpack(args))
+
+                -- Teleportar até FirePortal e ativar
                 local teleported, floor = teleportToFirePortal()
                 if teleported then
                     task.wait(0.5)
@@ -2856,7 +2871,7 @@ Tabs.dungeon:AddToggle("CastleToggle", {
                     autoCastle()
                     Fluent:Notify({
                         Title = "Castle Ativado",
-                        Content = "Andar inicial: " .. tostring(entryFloor),
+                        Content = "Iniciado no andar " .. tostring(entryFloor),
                         Duration = 3
                     })
                 else
