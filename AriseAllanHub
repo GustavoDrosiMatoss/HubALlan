@@ -2809,7 +2809,7 @@ Tabs.dungeon:AddToggle("AutoCastle", {
 
 
 -- ===============================
--- Castle Entry Floor + Start Button (Corrigido)
+-- Castle Entry Floor + Auto Castle Toggle (Final)
 -- ===============================
 
 -- Garantir que a flag existe
@@ -2842,30 +2842,38 @@ Tabs.dungeon:AddInput("EntryFloorInput", {
     end
 })
 
-Tabs.dungeon:AddButton({
-    Title = "Iniciar Castle",
-    Description = "Teleportar para Fire Portal, ativar portal e iniciar auto farm",
-    Callback = function()
-        task.spawn(function()
-            local teleported, floor = teleportToFirePortal()
-            if teleported then
-                task.wait(0.5)
-                activateFirePortal()
-                task.wait(1)
-                castleEnabled = true
-                autoCastle()
-                Fluent:Notify({
-                    Title = "Castle Iniciado",
-                    Content = "Andar inicial: " .. tostring(entryFloor),
-                    Duration = 3
-                })
-            else
-                Fluent:Notify({
-                    Title = "Erro",
-                    Content = "Não foi possível encontrar o FirePortal",
-                    Duration = 3
-                })
-            end
-        end)
+Tabs.dungeon:AddToggle("CastleToggle", {
+    Title = "Auto Castle",
+    Default = false,
+    Callback = function(state)
+        castleEnabled = state
+        if state then
+            task.spawn(function()
+                local teleported, floor = teleportToFirePortal()
+                if teleported then
+                    task.wait(0.5)
+                    activateFirePortal()
+                    task.wait(1)
+                    autoCastle()
+                    Fluent:Notify({
+                        Title = "Castle Ativado",
+                        Content = "Andar inicial: " .. tostring(entryFloor),
+                        Duration = 3
+                    })
+                else
+                    Fluent:Notify({
+                        Title = "Erro",
+                        Content = "Não foi possível encontrar o FirePortal",
+                        Duration = 3
+                    })
+                end
+            end)
+        else
+            Fluent:Notify({
+                Title = "Castle Desativado",
+                Content = "Auto Castle parado.",
+                Duration = 3
+            })
+        end
     end
 })
