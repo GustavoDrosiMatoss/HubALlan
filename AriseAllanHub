@@ -3052,98 +3052,44 @@ end
 
 
 
--- ============================
--- Auto Castle (com detecção via Room)
--- ============================
+-- =========================================
+-- Castle Portal Climber (farm + subir andar)
+-- =========================================
 
-castleEnabled = false
-local castleSessionActive = false
+castleClimbEnabled = false
 
--- Configuração do andar de saída (padrão 101)
-ConfigSystem.DefaultConfig.CastleExitFloor = ConfigSystem.DefaultConfig.CastleExitFloor or 101
-ConfigSystem.CurrentConfig.CastleExitFloor = ConfigSystem.CurrentConfig.CastleExitFloor or ConfigSystem.DefaultConfig.CastleExitFloor
-local exitFloor = ConfigSystem.CurrentConfig.CastleExitFloor
-
-Tabs.dungeon:AddInput("CastleExitFloor", {
-    Title = "Castle Exit Floor",
-    Default = tostring(exitFloor),
-    Placeholder = "Andar para sair",
-    Numeric = true,
-    Finished = true,
-    Callback = function(value)
-        local floor = tonumber(value)
-        if floor and floor > 0 then
-            exitFloor = floor
-            ConfigSystem.CurrentConfig.CastleExitFloor = floor
-            ConfigSystem.SaveConfig()
-        end
-    end
-})
-
--- Detectar andar atual pelo Room
-local function getCurrentCastleFloor()
+local function getCurrentRoomAndPortal()
     local main = workspace:FindFirstChild("__Main")
-    if not main then return nil end
+    if not main then return nil, nil end
     local world = main:FindFirstChild("__World")
-    if not world then return nil end
+    if not world then return nil, nil end
 
-    local current = nil
+    local current, portal = nil, nil
     for i = 1, 200 do
-        if world:FindFirstChild("Room_" .. i) then
+        local room = world:FindFirstChild("Room_" .. i)
+        if room then
             current = i
+            if room:FindFirstChild("FirePortal") then
+                portal = room.FirePortal
+            end
         end
     end
-    return current
+    return current, portal
 end
 
--- Loop do Auto Castle
-function autoCastle()
+local function autoClimbCastle()
     task.spawn(function()
-        while castleEnabled do
-            -- Detectar andar atual
-            local currentFloor = getCurrentCastleFloor()
-            if currentFloor and currentFloor >= exitFloor then
-                -- Sai do Castle
-                local leaveArgs = {
-                    [1] = {
-                        [1] = { ["Event"] = "LeaveDungeon" },
-                        [2] = "\12"
-                    }
-                }
-                pcall(function() remote:FireServer(unpack(leaveArgs)) end)
-
-                Fluent:Notify({
-                    Title = "Castle",
-                    Content = "Saiu no andar " .. tostring(exitFloor) .. ", reiniciando...",
-                    Duration = 3
-                })
-
-                task.wait(3)
-
-                -- Entrar novamente no andar inicial
-                local joinArgs = {
-                    [1] = {
-                        [1] = {
-                            ["Check"] = true,
-                            ["Floor"] = tostring(ConfigSystem.CurrentConfig.EntryFloor or 1),
-                            ["Event"] = "CastleAction",
-                            ["Action"] = "Join"
-                        },
-                        [2] = "\12"
-                    }
-                }
-                pcall(function() remote:FireServer(unpack(joinArgs)) end)
-                task.wait(2)
-            end
-
-            -- Farm normal de mobs
+        while castleClimbEnabled do
+            -- Atacar mobs no andar atual
             local mobsFolder = workspace:FindFirstChild("Enemies") or workspace:FindFirstChild("Mobs")
+            local hasMob = false
             if mobsFolder then
                 for _, mob in pairs(mobsFolder:GetChildren()) do
-                    if not castleEnabled then break end
+                    if not castleClimbEnabled then break end
                     local hrp = mob:FindFirstChild("HumanoidRootPart")
                     local hum = mob:FindFirstChild("Humanoid")
                     if hrp and hum and hum.Health > 0 then
+                        hasMob = true
                         local plr = game.Players.LocalPlayer
                         if plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
                             plr.Character.HumanoidRootPart.CFrame = hrp.CFrame * CFrame.new(0, 3, 0)
@@ -3156,67 +3102,53 @@ function autoCastle()
                 end
             end
 
-            task.wait(0.4)
+            -- Se não tiver mob → procurar FirePortal
+            if not hasMob then
+                local currentRoom, portal = getCurrentRoomAndPortal()
+                if portal then
+                    local plr = game.Players.LocalPlayer
+                    if plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
+                        plr.Character.HumanoidRootPart.CFrame = portal.CFrame * CFrame.new(0, 3, 0)
+                        plr.Character.HumanoidRootPart.Velocity = Vector3.zero
+                    end
+                    -- Ativar o portal
+                    pcall(function()
+                        fireproximityprompt(portal.ProximityPrompt)
+                    end)
+
+                    Fluent:Notify({
+                        Title = "Castle Climber",
+                        Content = "Subindo para o próximo andar (" .. tostring((currentRoom or 0) + 1) .. ")",
+                        Duration = 3
+                    })
+
+                    task.wait(3)
+                end
+            end
+
+            task.wait(0.5)
         end
     end)
 end
 
--- Toggle Auto Castle
-Tabs.dungeon:AddToggle("CastleToggle", {
-    Title = "Auto Castle",
-    Default = ConfigSystem.CurrentConfig.CastleToggle or false,
+Tabs.dungeon:AddToggle("CastleClimbToggle", {
+    Title = "Castle Portal Climber",
+    Default = false,
     Callback = function(state)
-        castleEnabled = state
-        ConfigSystem.CurrentConfig.CastleToggle = state
-        ConfigSystem.SaveConfig()
-
+        castleClimbEnabled = state
         if state then
-            task.spawn(function()
-                -- Join Castle Infernal
-                local joinArgs = {
-                    [1] = {
-                        [1] = {
-                            ["Check"] = true,
-                            ["Floor"] = tostring(ConfigSystem.CurrentConfig.EntryFloor or 1),
-                            ["Event"] = "CastleAction",
-                            ["Action"] = "Join"
-                        },
-                        [2] = "\12"
-                    }
-                }
-                pcall(function() remote:FireServer(unpack(joinArgs)) end)
-                task.wait(1)
-
-                castleSessionActive = true
-                autoCastle()
-
-                pcall(function()
-                    Fluent:Notify({
-                        Title = "Castle Ativado",
-                        Content = "Castle iniciado no andar " .. tostring(ConfigSystem.CurrentConfig.EntryFloor or 1) .. " (sairá no " .. tostring(exitFloor) .. ")",
-                        Duration = 3
-                    })
-                end)
-            end)
+            autoClimbCastle()
+            Fluent:Notify({
+                Title = "Castle Climber",
+                Content = "Ativado - irá matar mobs e subir pelos portais",
+                Duration = 3
+            })
         else
-            if castleSessionActive then
-                local leaveArgs = {
-                    [1] = {
-                        [1] = { ["Event"] = "LeaveDungeon" },
-                        [2] = "\12"
-                    }
-                }
-                pcall(function() remote:FireServer(unpack(leaveArgs)) end)
-                castleSessionActive = false
-            end
-
-            pcall(function()
-                Fluent:Notify({
-                    Title = "Castle Desativado",
-                    Content = "Saiu do Castle.",
-                    Duration = 3
-                })
-            end)
+            Fluent:Notify({
+                Title = "Castle Climber",
+                Content = "Desativado",
+                Duration = 3
+            })
         end
     end
 })
