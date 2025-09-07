@@ -2809,13 +2809,12 @@ Tabs.dungeon:AddToggle("AutoCastle", {
 
 
 -- ===============================
--- Castle Entry Floor + Auto Castle Toggle (Final)
+-- Castle Entry Floor + Auto Castle Toggle (FINAL CLEAN)
 -- ===============================
 
--- Garantir que a flag existe
 local castleEnabled = false
 
--- Adicionar suporte no ConfigSystem
+-- Suporte no ConfigSystem
 if ConfigSystem.DefaultConfig.EntryFloor == nil then
     ConfigSystem.DefaultConfig.EntryFloor = 1
 end
