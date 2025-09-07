@@ -2809,10 +2809,22 @@ Tabs.dungeon:AddToggle("AutoCastle", {
 
 
 -- ===============================
--- Castle Entry Floor + Start Button
+-- Castle Entry Floor + Start Button (Corrigido)
 -- ===============================
 
-local entryFloor = 1
+-- Garantir que a flag existe
+local castleEnabled = false
+
+-- Adicionar suporte no ConfigSystem
+if ConfigSystem.DefaultConfig.EntryFloor == nil then
+    ConfigSystem.DefaultConfig.EntryFloor = 1
+end
+if ConfigSystem.CurrentConfig.EntryFloor == nil then
+    ConfigSystem.CurrentConfig.EntryFloor = ConfigSystem.DefaultConfig.EntryFloor
+end
+
+local entryFloor = ConfigSystem.CurrentConfig.EntryFloor or 1
+
 Tabs.dungeon:AddInput("EntryFloorInput", {
     Title = "Entry Floor (Start)",
     Default = tostring(entryFloor),
@@ -2823,6 +2835,8 @@ Tabs.dungeon:AddInput("EntryFloorInput", {
         local floor = tonumber(value)
         if floor and floor > 0 then
             entryFloor = floor
+            ConfigSystem.CurrentConfig.EntryFloor = floor
+            ConfigSystem.SaveConfig()
             print("Andar de entrada definido para: " .. entryFloor)
         end
     end
@@ -2838,14 +2852,13 @@ Tabs.dungeon:AddButton({
                 task.wait(0.5)
                 activateFirePortal()
                 task.wait(1)
-                -- Ativar Auto Castle
                 castleEnabled = true
+                autoCastle()
                 Fluent:Notify({
                     Title = "Castle Iniciado",
-                    Content = "Iniciando castle no andar ".. tostring(entryFloor),
+                    Content = "Andar inicial: " .. tostring(entryFloor),
                     Duration = 3
                 })
-                autoCastle()
             else
                 Fluent:Notify({
                     Title = "Erro",
