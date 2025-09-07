@@ -2537,10 +2537,160 @@ Tabs.dungeon:AddToggle("TeleportMobs", {
     end
 })
 
--- ===== Inserção: Schedule AutoDungeon/AutoCastelo =====
+-- ================== Auto Castelo (integrado na aba Auto Dungeon) ==================
+do
+    local ativarCastelo = config.AutoCastelo or false
+    local ativarAutoLeave = config.AutoLeave or false
+    local andarEntrada = config.AndarEntrada or 10
+    local andarSaida = config.AndarSaida or 1
+    local currentFloor = 0
 
--- ===== Agendamento: pausar Dungeon nos horários de Castelo =====
--- Pausa Auto Dungeon entre xx:15-xx:30 e xx:45-xx:57, sai da dungeon e tenta ativar Castelo (se disponível).
+    -- Dropdown Andar Entrada
+    tabDungeon:AddDropdown("AndarEntrada", {
+        Title = "Castelo - Andar de Entrada",
+        Values = (function()
+            local vals = {}
+            for i = 10,110,10 do table.insert(vals,tostring(i)) end
+            return vals
+        end)(),
+        Multi = false,
+        Default = tostring(andarEntrada),
+        Callback = function(val)
+            andarEntrada = tonumber(val)
+            config.AndarEntrada = andarEntrada
+            salvarConfig()
+            print("⚔️ Andar de entrada do castelo:",andarEntrada)
+        end
+    })
+
+    -- Dropdown Andar Saida
+    tabDungeon:AddDropdown("AndarSaida", {
+        Title = "Castelo - Andar de Saída",
+        Values = (function()
+            local vals = {}
+            for i = 1,117 do table.insert(vals,tostring(i)) end
+            return vals
+        end)(),
+        Multi = false,
+        Default = tostring(andarSaida),
+        Callback = function(val)
+            andarSaida = tonumber(val)
+            config.AndarSaida = andarSaida
+            salvarConfig()
+            print("🚪 Andar de saída do castelo:",andarSaida)
+        end
+    })
+
+    -- Toggle Auto Leave
+    tabDungeon:AddToggle("ToggleAutoLeave", {
+        Title = "Castelo - Auto Leave",
+        Default = ativarAutoLeave,
+        Callback = function(state)
+            ativarAutoLeave = state
+            config.AutoLeave = state
+            salvarConfig()
+            print(state and "🚪 Auto Leave ativado" or "🚪 Auto Leave desativado")
+        end
+    })
+
+    -- Funções Castelo
+    local function entrarCastelo()
+        local args = {
+            [1] = {
+                [1] = {
+                    ["Check"] = true,
+                    ["Floor"] = tostring(andarEntrada),
+                    ["Event"] = "CastleAction",
+                    ["Action"] = "Join"
+                },
+                [2] = "\\12"
+            }
+        }
+        game:GetService("ReplicatedStorage").BridgeNet2.dataRemoteEvent:FireServer(unpack(args))
+        print("✅ Entrando no andar",andarEntrada)
+    end
+
+    local function sairCastelo()
+        local args = {
+            [1] = {
+                [1] = {
+                    ["Check"] = true,
+                    ["Floor"] = tostring(andarSaida),
+                    ["Event"] = "CastleAction",
+                    ["Action"] = "LeaveDungeon"
+                },
+                [2] = "\\12"
+            }
+        }
+        game:GetService("ReplicatedStorage").BridgeNet2.dataRemoteEvent:FireServer(unpack(args))
+        print("❌ Saindo no andar",andarSaida)
+    end
+
+    local function atacarMobsCastelo()
+        while ativarCastelo do
+            local target = getNearestEnemy and getNearestEnemy()
+            if target and target.Parent then
+                if anticheat then anticheat() end
+                if moveToTarget then moveToTarget(target) end
+                task.wait(0.3)
+                if fireShowPetsRemote then fireShowPetsRemote() end
+                game:GetService("ReplicatedStorage").BridgeNet2.dataRemoteEvent:FireServer({
+                    {
+                        ["PetPos"] = {},
+                        ["AttackType"] = "All",
+                        ["Event"] = "Attack",
+                        ["Enemy"] = target.Name
+                    },
+                    "\\7"
+                })
+                while ativarCastelo and target.Parent and (not isEnemyDead or not isEnemyDead(target)) do
+                    task.wait(0.1)
+                end
+            else
+                task.wait(0.2)
+            end
+        end
+    end
+
+    -- Monitorar andar atual
+    game:GetService("ReplicatedStorage").BridgeNet2.dataRemoteEvent.OnClientEvent:Connect(function(data)
+        if typeof(data)=="table" and data[1] and data[1]["Event"]=="PortalAction" then
+            local andar = tonumber(data[1]["Floor"])
+            if andar then
+                currentFloor = andar
+                if ativarCastelo and ativarAutoLeave and currentFloor == andarSaida then
+                    sairCastelo()
+                end
+            end
+        end
+    end)
+
+    -- Toggle Auto Castelo
+    tabDungeon:AddToggle("ToggleAutoCastelo", {
+        Title = "Castelo - Auto Castelo",
+        Default = ativarCastelo,
+        Callback = function(state)
+            ativarCastelo = state
+            config.AutoCastelo = state
+            salvarConfig()
+            if state then
+                print("🔥 Auto Castelo ativado!")
+                entrarCastelo()
+                task.spawn(atacarMobsCastelo)
+            else
+                print("🛑 Auto Castelo desativado!")
+            end
+        end
+    })
+
+    if config.AutoCastelo then
+        ativarCastelo = true
+        entrarCastelo()
+        task.spawn(atacarMobsCastelo)
+    end
+end
+
+-- ================== Schedule: pausa Dungeon em horários de Castelo ==================
 do
     local function dentroIntervaloCastelo()
         local now = os.date("*t")
@@ -2551,82 +2701,37 @@ do
         return false
     end
 
-    -- Flags de controle
-    local pausedBySchedule = false
-    local prevTeleportState = false
-
     task.spawn(function()
         while true do
-            local ok, err = pcall(function()
-                local inInterval = dentroIntervaloCastelo()
-                if inInterval then
-                    -- Se a dungeon estava rodando, pausar e sair
-                    if teleportEnabled then
-                        prevTeleportState = teleportEnabled
-                        teleportEnabled = false
-                        pausedBySchedule = true
-
-                        -- Tenta enviar o LeaveDungeon (silencioso com pcall)
-                        pcall(function()
-                            local args = {
+            local ok,err=pcall(function()
+                if dentroIntervaloCastelo() then
+                    if ativarDungeon then
+                        -- Sai da dungeon
+                        local args = {
+                            [1] = {
                                 [1] = {
-                                    [1] = {
-                                        ["Check"] = true,
-                                        ["Event"] = "DungeonAction",
-                                        ["Action"] = "LeaveDungeon"
-                                    },
-                                    [2] = "\\12"
-                                }
+                                    ["Check"] = true,
+                                    ["Event"] = "DungeonAction",
+                                    ["Action"] = "LeaveDungeon"
+                                },
+                                [2] = "\\12"
                             }
-                            game:GetService("ReplicatedStorage").BridgeNet2.dataRemoteEvent:FireServer(unpack(args))
-                        end)
-
-                        -- Se você tem a função entrarCastelo definida (por outra parte do script), chama-la
-                        if type(enterCastelo) == "function" then
-                            pcall(function() entrarCastelo() end)
-                        end
-
-                        -- Se atacarMobsCastelo existe, inicia-lo
-                        if type(atacarMobsCastelo) == "function" then
+                        }
+                        game:GetService("ReplicatedStorage").BridgeNet2.dataRemoteEvent:FireServer(unpack(args))
+                        print("⏸️ Dungeon pausada - horário de Castelo")
+                        -- Ativa castelo se configurado
+                        if config.AutoCastelo then
                             task.spawn(function()
-                                pcall(atacarMobsCastelo)
-                            end)
-                        end
-
-                        -- Notificação (se Fluent estiver carregado)
-                        if type(Fluent) == "table" and Fluent.Notify then
-                            pcall(function()
-                                Fluent:Notify({
-                                    Title = "Schedule",
-                                    Content = "Pausando Dungeon (horário de Castelo).",
-                                    Duration = 3
-                                })
-                            end)
-                        end
-                    end
-                else
-                    -- Fora do intervalo: restaura o estado anterior se foi pausado pelo schedule
-                    if pausedBySchedule then
-                        teleportEnabled = prevTeleportState or false
-                        pausedBySchedule = false
-
-                        if type(Fluent) == "table" and Fluent.Notify then
-                            pcall(function()
-                                Fluent:Notify({
-                                    Title = "Schedule",
-                                    Content = "Intervalo de Castelo terminado. Restaurando Auto Dungeon.",
-                                    Duration = 3
-                                })
+                                entrarCastelo()
+                                atacarMobsCastelo()
                             end)
                         end
                     end
                 end
             end)
-            if not ok then
-                -- Evita travar o loop se algum erro interno acontecer
-                warn("[Schedule] erro no loop: " .. tostring(err))
-            end
-            task.wait(5) -- checar a cada 5 segundos
+            if not ok then warn("Schedule erro: "..tostring(err)) end
+            task.wait(10)
         end
     end)
 end
+-- ================================================================================
