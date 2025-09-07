@@ -2985,3 +2985,67 @@ Tabs.dungeon:AddToggle("CastleToggle", {
         end
     end
 })
+
+
+
+-- ===============================================
+-- OVERRIDE SEGURO: Auto Castle -> mata mobs primeiro, depois Fire Portal
+-- (não remove nada do script anterior; só substitui a função em runtime)
+-- ===============================================
+do
+    local function autoCastle_mobs_first()
+        task.spawn(function()
+            while castleEnabled do
+                -- 1) Varre inimigos do andar atual
+                local mobsFolder = workspace:FindFirstChild("Enemies") or workspace:FindFirstChild("Mobs")
+                local mobsAlive = 0
+                if mobsFolder then
+                    for _, mob in pairs(mobsFolder:GetChildren()) do
+                        if not castleEnabled then break end
+                        local hrp = mob:FindFirstChild("HumanoidRootPart")
+                        local hum = mob:FindFirstChild("Humanoid")
+                        if hrp and hum and hum.Health > 0 then
+                            mobsAlive = mobsAlive + 1
+                            -- Teleporta próximo ao mob
+                            local plr = game.Players.LocalPlayer
+                            if plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
+                                plr.Character.HumanoidRootPart.CFrame = hrp.CFrame * CFrame.new(0, 3, 0)
+                            end
+                            -- Dispara ataque (ajuste para seu sistema de combate)
+                            pcall(function()
+                                remote:FireServer("Attack", mob)
+                            end)
+                            task.wait(0.25)
+                        end
+                    end
+                end
+
+                -- 2) Se matou tudo, vai para o Fire Portal e ativa para subir
+                if castleEnabled and mobsAlive == 0 then
+                    local teleported = false
+                    local ok, ret = pcall(function()
+                        local tpd, floor = teleportToFirePortal()
+                        return tpd
+                    end)
+                    teleported = ok and ret
+
+                    if teleported then
+                        task.wait(0.5)
+                        pcall(activateFirePortal)
+                        task.wait(1.2) -- tempo para trocar de andar
+                    else
+                        pcall(function()
+                            Fluent:Notify({ Title = "Aviso", Content = "Não consegui achar o Fire Portal. Tentando novamente...", Duration = 2 })
+                        end)
+                        task.wait(1)
+                    end
+                end
+
+                task.wait(0.35)
+            end
+        end)
+    end
+
+    -- Troca a função usada pelo toggle para a versão acima
+    autoCastle = autoCastle_mobs_first
+end
