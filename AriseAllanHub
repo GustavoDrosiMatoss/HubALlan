@@ -2809,7 +2809,7 @@ Tabs.dungeon:AddToggle("AutoCastle", {
 
 
 -- ===============================
--- Castle Entry Floor + Auto Castle Toggle (com Join)
+-- Castle Entry Floor + Auto Castle Toggle (com Join, Leave e Save)
 -- ===============================
 
 local castleEnabled = false
@@ -2820,6 +2820,12 @@ if ConfigSystem.DefaultConfig.EntryFloor == nil then
 end
 if ConfigSystem.CurrentConfig.EntryFloor == nil then
     ConfigSystem.CurrentConfig.EntryFloor = ConfigSystem.DefaultConfig.EntryFloor
+end
+if ConfigSystem.DefaultConfig.CastleToggle == nil then
+    ConfigSystem.DefaultConfig.CastleToggle = false
+end
+if ConfigSystem.CurrentConfig.CastleToggle == nil then
+    ConfigSystem.CurrentConfig.CastleToggle = ConfigSystem.DefaultConfig.CastleToggle
 end
 
 local entryFloor = ConfigSystem.CurrentConfig.EntryFloor or 1
@@ -2843,9 +2849,12 @@ Tabs.dungeon:AddInput("EntryFloorInput", {
 
 Tabs.dungeon:AddToggle("CastleToggle", {
     Title = "Auto Castle",
-    Default = false,
+    Default = ConfigSystem.CurrentConfig.CastleToggle or false,
     Callback = function(state)
         castleEnabled = state
+        ConfigSystem.CurrentConfig.CastleToggle = state
+        ConfigSystem.SaveConfig()
+
         if state then
             task.spawn(function()
                 -- Enviar remote para entrar no Castle no andar escolhido
@@ -2883,9 +2892,20 @@ Tabs.dungeon:AddToggle("CastleToggle", {
                 end
             end)
         else
+            -- Quando desligar o toggle -> sair do andar
+            local leaveArgs = {
+                [1] = {
+                    [1] = {
+                        ["Event"] = "LeaveDungeon"
+                    },
+                    [2] = "\12"
+                }
+            }
+            remote:FireServer(unpack(leaveArgs))
+
             Fluent:Notify({
                 Title = "Castle Desativado",
-                Content = "Auto Castle parado.",
+                Content = "Saiu do Castle e parou Auto Castle.",
                 Duration = 3
             })
         end
