@@ -3053,7 +3053,7 @@ end
 
 
 -- ============================
--- Auto Castle (com detecção via FirePortal)
+-- Auto Castle (com detecção via Room)
 -- ============================
 
 castleEnabled = false
@@ -3080,20 +3080,20 @@ Tabs.dungeon:AddInput("CastleExitFloor", {
     end
 })
 
--- Detectar andar atual usando FirePortal (sem teleportar)
+-- Detectar andar atual pelo Room
 local function getCurrentCastleFloor()
     local main = workspace:FindFirstChild("__Main")
     if not main then return nil end
     local world = main:FindFirstChild("__World")
     if not world then return nil end
 
+    local current = nil
     for i = 1, 200 do
-        local room = world:FindFirstChild("Room_" .. i)
-        if room and room:FindFirstChild("FirePortal") then
-            return i
+        if world:FindFirstChild("Room_" .. i) then
+            current = i
         end
     end
-    return nil
+    return current
 end
 
 -- Loop do Auto Castle
