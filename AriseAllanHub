@@ -2809,43 +2809,194 @@ Tabs.dungeon:AddToggle("AutoCastle", {
 
 
 -- ===============================================
--- SAFE PATCH: Auto Castle (Completo) com inicialização tardia
--- - Override do autoCastle: mata mobs -> Fire Portal -> ativa -> sobe
--- - Toggle que: Join Castle + Teleport + Ativa + Inicia farm
+-- Castle Entry Floor + Auto Castle Toggle
+-- (Join ao ativar, Leave ao desativar, salva estado
+-- e NÃO chama Leave na inicialização do UI)
 -- ===============================================
-task.spawn(function()
-    -- Espera o ambiente do script base ficar pronto
-    local function exists(x) return x ~= nil end
-    while true do
-        local ok = pcall(function()
-            return Tabs and Tabs.dungeon and ConfigSystem and ReplicatedStorage and remote
-        end)
-        if ok and Tabs and Tabs.dungeon and ConfigSystem and remote then break end
-        task.wait(0.25)
-    end
 
-    -- Garantir chaves de config
-    if ConfigSystem.DefaultConfig.EntryFloor == nil then
-        ConfigSystem.DefaultConfig.EntryFloor = 1
-    end
-    if ConfigSystem.CurrentConfig.EntryFloor == nil then
-        ConfigSystem.CurrentConfig.EntryFloor = ConfigSystem.DefaultConfig.EntryFloor
-    end
-    if ConfigSystem.DefaultConfig.CastleToggle == nil then
-        ConfigSystem.DefaultConfig.CastleToggle = false
-    end
-    if ConfigSystem.CurrentConfig.CastleToggle == nil then
-        ConfigSystem.CurrentConfig.CastleToggle = ConfigSystem.DefaultConfig.CastleToggle
-    end
+local castleEnabled = false
+local castleSessionActive = false
+local CastleToggle_Initialized = false
 
-    local entryFloor = ConfigSystem.CurrentConfig.EntryFloor or 1
-    local castleSessionActive = false
+-- Helper para disparar o remote com fallback seguro
+local function CastleFireServer(args)
+    local ok = false
+    -- Tenta usar variável 'remote' se existir no script base
+    pcall(function()
+        if remote and typeof(remote.FireServer) == "function" then
+            remote:FireServer(unpack(args))
+            ok = true
+        end
+    end)
+    if not ok then
+        local RS = game:GetService("ReplicatedStorage")
+        local b2 = RS:FindFirstChild("BridgeNet2")
+        if b2 then
+            local evt = b2:FindFirstChild("dataRemoteEvent")
+            if evt then
+                evt:FireServer(unpack(args))
+                ok = true
+            end
+        end
+    end
+    return ok
+end
 
-    -- Override do autoCastle: mobs primeiro -> portal
-    autoCastle = function()
+-- Suporte no ConfigSystem
+if ConfigSystem.DefaultConfig.EntryFloor == nil then
+    ConfigSystem.DefaultConfig.EntryFloor = 1
+end
+if ConfigSystem.CurrentConfig.EntryFloor == nil then
+    ConfigSystem.CurrentConfig.EntryFloor = ConfigSystem.DefaultConfig.EntryFloor
+end
+if ConfigSystem.DefaultConfig.CastleToggle == nil then
+    ConfigSystem.DefaultConfig.CastleToggle = false
+end
+if ConfigSystem.CurrentConfig.CastleToggle == nil then
+    ConfigSystem.CurrentConfig.CastleToggle = ConfigSystem.DefaultConfig.CastleToggle
+end
+
+local entryFloor = ConfigSystem.CurrentConfig.EntryFloor or 1
+
+Tabs.dungeon:AddInput("EntryFloorInput", {
+    Title = "Entry Floor (Start)",
+    Default = tostring(entryFloor),
+    Placeholder = "Enter floor number",
+    Numeric = true,
+    Finished = true,
+    Callback = function(value)
+        local floor = tonumber(value)
+        if floor and floor > 0 then
+            entryFloor = floor
+            ConfigSystem.CurrentConfig.EntryFloor = floor
+            ConfigSystem.SaveConfig()
+            print("Andar de entrada definido para: " .. entryFloor)
+        end
+    end
+})
+
+Tabs.dungeon:AddToggle("CastleToggle", {
+    Title = "Auto Castle",
+    Default = ConfigSystem.CurrentConfig.CastleToggle or false,
+    Callback = function(state)
+        -- Previne sair da Dungeon na primeira chamada do UI (estado false)
+        if not CastleToggle_Initialized then
+            CastleToggle_Initialized = true
+            castleEnabled = state
+            -- Se o estado salvo for true, iniciamos automaticamente
+            if state then
+                task.spawn(function()
+                    -- Join Castle no andar escolhido
+                    local joinArgs = {
+                        [1] = {
+                            [1] = {
+                                ["Check"] = true,
+                                ["Floor"] = tostring(entryFloor),
+                                ["Event"] = "CastleAction",
+                                ["Action"] = "Join"
+                            },
+                            [2] = "\\12"
+                        }
+                    }
+                    CastleFireServer(joinArgs)
+
+                    -- Teleportar e ativar Fire Portal
+                    local teleported = false
+                    local ok, ret = pcall(function()
+                        local tpd, floor = teleportToFirePortal()
+                        return tpd
+                    end)
+                    teleported = ok and ret
+
+                    if teleported then
+                        task.wait(0.5)
+                        pcall(activateFirePortal)
+                        task.wait(1)
+                        castleSessionActive = true
+                        pcall(autoCastle)
+                        Fluent:Notify({ Title = "Castle Ativado", Content = "Iniciado no andar " .. tostring(entryFloor), Duration = 3 })
+                    else
+                        Fluent:Notify({ Title = "Erro", Content = "Não foi possível encontrar o FirePortal", Duration = 3 })
+                    end
+                end)
+            end
+            -- Não executa a parte de 'Leave' na inicialização
+            return
+        end
+
+        -- A partir daqui são mudanças reais do usuário
+        castleEnabled = state
+        ConfigSystem.CurrentConfig.CastleToggle = state
+        ConfigSystem.SaveConfig()
+
+        if state then
+            task.spawn(function()
+                -- Join Castle no andar escolhido
+                local joinArgs = {
+                    [1] = {
+                        [1] = {
+                            ["Check"] = true,
+                            ["Floor"] = tostring(entryFloor),
+                            ["Event"] = "CastleAction",
+                            ["Action"] = "Join"
+                        },
+                        [2] = "\\12"
+                    }
+                }
+                CastleFireServer(joinArgs)
+
+                -- Teleportar e ativar Fire Portal
+                local teleported = false
+                local ok, ret = pcall(function()
+                    local tpd, floor = teleportToFirePortal()
+                    return tpd
+                end)
+                teleported = ok and ret
+
+                if teleported then
+                    task.wait(0.5)
+                    pcall(activateFirePortal)
+                    task.wait(1)
+                    castleSessionActive = true
+                    pcall(autoCastle)
+                    Fluent:Notify({ Title = "Castle Ativado", Content = "Iniciado no andar " .. tostring(entryFloor), Duration = 3 })
+                else
+                    Fluent:Notify({ Title = "Erro", Content = "Não foi possível encontrar o FirePortal", Duration = 3 })
+                end
+            end)
+        else
+            -- Só sai se a sessão foi iniciada por este toggle (evita sair de outras Dungeons)
+            if castleSessionActive then
+                local leaveArgs = {
+                    [1] = {
+                        [1] = { ["Event"] = "LeaveDungeon" },
+                        [2] = "\\12"
+                    }
+                }
+                CastleFireServer(leaveArgs)
+                castleSessionActive = false
+            end
+
+            Fluent:Notify({
+                Title = "Castle Desativado",
+                Content = "Auto Castle parado.",
+                Duration = 3
+            })
+        end
+    end
+})
+
+
+
+-- ===============================================
+-- OVERRIDE SEGURO: Auto Castle -> mata mobs primeiro, depois Fire Portal
+-- (não remove nada do script anterior; só substitui a função em runtime)
+-- ===============================================
+do
+    local function autoCastle_mobs_first()
         task.spawn(function()
             while castleEnabled do
-                -- 1) Varre inimigos
+                -- 1) Varre inimigos do andar atual
                 local mobsFolder = workspace:FindFirstChild("Enemies") or workspace:FindFirstChild("Mobs")
                 local mobsAlive = 0
                 if mobsFolder then
@@ -2855,10 +3006,12 @@ task.spawn(function()
                         local hum = mob:FindFirstChild("Humanoid")
                         if hrp and hum and hum.Health > 0 then
                             mobsAlive = mobsAlive + 1
+                            -- Teleporta próximo ao mob
                             local plr = game.Players.LocalPlayer
                             if plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
                                 plr.Character.HumanoidRootPart.CFrame = hrp.CFrame * CFrame.new(0, 3, 0)
                             end
+                            -- Dispara ataque (ajuste para seu sistema de combate)
                             pcall(function()
                                 remote:FireServer("Attack", mob)
                             end)
@@ -2867,21 +3020,22 @@ task.spawn(function()
                     end
                 end
 
-                -- 2) Se acabou, Fire Portal
+                -- 2) Se matou tudo, vai para o Fire Portal e ativa para subir
                 if castleEnabled and mobsAlive == 0 then
                     local teleported = false
                     local ok, ret = pcall(function()
-                        local tpd, _floor = teleportToFirePortal()
+                        local tpd, floor = teleportToFirePortal()
                         return tpd
                     end)
                     teleported = ok and ret
+
                     if teleported then
                         task.wait(0.5)
                         pcall(activateFirePortal)
-                        task.wait(1.25)
+                        task.wait(1.2) -- tempo para trocar de andar
                     else
                         pcall(function()
-                            Fluent:Notify({ Title = "Aviso", Content = "Não consegui achar o Fire Portal. Tentando de novo...", Duration = 2 })
+                            Fluent:Notify({ Title = "Aviso", Content = "Não consegui achar o Fire Portal. Tentando novamente...", Duration = 2 })
                         end)
                         task.wait(1)
                     end
@@ -2892,91 +3046,119 @@ task.spawn(function()
         end)
     end
 
-    -- Campo de entrada do andar (se ainda não existir)
-    pcall(function()
-        Tabs.dungeon:AddInput("EntryFloorInput_SAFE", {
-            Title = "Entry Floor (Start)",
-            Default = tostring(entryFloor),
-            Placeholder = "Andar inicial",
-            Numeric = true,
-            Finished = true,
-            Callback = function(value)
-                local floor = tonumber(value)
-                if floor and floor > 0 then
-                    entryFloor = floor
-                    ConfigSystem.CurrentConfig.EntryFloor = floor
-                    ConfigSystem.SaveConfig()
-                    pcall(function()
-                        Fluent:Notify({ Title = "Andar", Content = "Entrada definida: " .. tostring(entryFloor), Duration = 2 })
-                    end)
-                end
-            end
-        })
-    end)
+    -- Troca a função usada pelo toggle para a versão acima
+    autoCastle = autoCastle_mobs_first
+end
 
-    -- Toggle completo (Join + Teleport + Ativar + Farm)
-    pcall(function()
-        Tabs.dungeon:AddToggle("CastleToggleFull_SAFE", {
-            Title = "Auto Castle (Completo)",
-            Default = ConfigSystem.CurrentConfig.CastleToggle or false,
-            Callback = function(state)
-                castleEnabled = state
-                ConfigSystem.CurrentConfig.CastleToggle = state
-                ConfigSystem.SaveConfig()
-                if state then
-                    task.spawn(function()
-                        -- Join Castle
-                        local joinArgs = {
-                            [1] = {
-                                [1] = {
-                                    ["Check"] = true,
-                                    ["Floor"] = tostring(entryFloor),
-                                    ["Event"] = "CastleAction",
-                                    ["Action"] = "Join"
-                                },
-                                [2] = "\\12"
-                            }
-                        }
-                        pcall(function() remote:FireServer(unpack(joinArgs)) end)
 
-                        -- Teleportar + ativar
-                        local teleported = false
-                        local ok, ret = pcall(function()
-                            local tpd, _floor = teleportToFirePortal()
-                            return tpd
-                        end)
-                        teleported = ok and ret
-                        if teleported then
-                            task.wait(0.5)
-                            pcall(activateFirePortal)
-                            task.wait(1)
+
+-- ============================
+-- Auto Castle (Join + Farm + Leave)
+-- ============================
+
+castleEnabled = false
+local castleSessionActive = false
+
+-- Farm simples: só procurar e matar mobs
+function autoCastle()
+    task.spawn(function()
+        while castleEnabled do
+            local mobsFolder = workspace:FindFirstChild("Enemies") or workspace:FindFirstChild("Mobs")
+            if mobsFolder then
+                for _, mob in pairs(mobsFolder:GetChildren()) do
+                    if not castleEnabled then break end
+                    local hrp = mob:FindFirstChild("HumanoidRootPart")
+                    local hum = mob:FindFirstChild("Humanoid")
+                    if hrp and hum and hum.Health > 0 then
+                        local plr = game.Players.LocalPlayer
+                        if plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
+                            plr.Character.HumanoidRootPart.CFrame = hrp.CFrame * CFrame.new(0, 3, 0)
                         end
-
-                        -- Iniciar farm
-                        castleSessionActive = true
-                        autoCastle()
-
                         pcall(function()
-                            Fluent:Notify({ Title = "Castle Ativado", Content = "Infernal Castle iniciado no andar " .. tostring(entryFloor), Duration = 3 })
+                            remote:FireServer("Attack", mob)
                         end)
-                    end)
-                else
-                    -- Leave apenas se foi iniciado por este toggle
-                    if castleSessionActive then
-                        local leaveArgs = {
-                            [1] = {
-                                [1] = { ["Event"] = "LeaveDungeon" },
-                                [2] = "\\12"
-                            }
-                        }
-                        pcall(function() remote:FireServer(unpack(leaveArgs)) end)
-                        castleSessionActive = false
+                        task.wait(0.25)
                     end
-                    pcall(function()
-                        Fluent:Notify({ Title = "Castle Desativado", Content = "Auto Castle parado.", Duration = 3 })
-                    end)
                 end
             end
-        })
+            task.wait(0.4)
+        end
     end)
-end)
+end
+
+-- Input para escolher andar
+Tabs.dungeon:AddInput("CastleEntryFloor", {
+    Title = "Castle Floor",
+    Default = tostring(ConfigSystem.CurrentConfig.EntryFloor or 1),
+    Placeholder = "Digite o andar",
+    Numeric = true,
+    Finished = true,
+    Callback = function(value)
+        local floor = tonumber(value)
+        if floor and floor > 0 then
+            ConfigSystem.CurrentConfig.EntryFloor = floor
+            ConfigSystem.SaveConfig()
+            entryFloor = floor
+        end
+    end
+})
+
+-- Toggle Auto Castle
+Tabs.dungeon:AddToggle("CastleToggle", {
+    Title = "Auto Castle",
+    Default = ConfigSystem.CurrentConfig.CastleToggle or false,
+    Callback = function(state)
+        castleEnabled = state
+        ConfigSystem.CurrentConfig.CastleToggle = state
+        ConfigSystem.SaveConfig()
+
+        if state then
+            task.spawn(function()
+                -- Join Castle Infernal
+                local joinArgs = {
+                    [1] = {
+                        [1] = {
+                            ["Check"] = true,
+                            ["Floor"] = tostring(ConfigSystem.CurrentConfig.EntryFloor or 1),
+                            ["Event"] = "CastleAction",
+                            ["Action"] = "Join"
+                        },
+                        [2] = "\12"
+                    }
+                }
+                pcall(function() remote:FireServer(unpack(joinArgs)) end)
+                task.wait(1)
+
+                castleSessionActive = true
+                autoCastle()
+
+                pcall(function()
+                    Fluent:Notify({
+                        Title = "Castle Ativado",
+                        Content = "Infernal Castle iniciado no andar " .. tostring(ConfigSystem.CurrentConfig.EntryFloor or 1),
+                        Duration = 3
+                    })
+                end)
+            end)
+        else
+            if castleSessionActive then
+                local leaveArgs = {
+                    [1] = {
+                        [1] = { ["Event"] = "LeaveDungeon" },
+                        [2] = "\12"
+                    }
+                }
+                pcall(function() remote:FireServer(unpack(leaveArgs)) end)
+                castleSessionActive = false
+            end
+
+            pcall(function()
+                Fluent:Notify({
+                    Title = "Castle Desativado",
+                    Content = "Saiu do Castle Infernal.",
+                    Duration = 3
+                })
+            end)
+        end
+    end
+})
