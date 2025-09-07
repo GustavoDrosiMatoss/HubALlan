@@ -1,5 +1,5 @@
 -- Allan Hub Arise + Auto Dungeon + Auto Castelo com Config Persistente
--- 🔥 Agora tanto Auto Dungeon quanto Auto Castelo salvam seu estado em allan_hub_config.json
+-- 🔥 Agora Auto Dungeon restaura automaticamente quando recarregar o script
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local remote = ReplicatedStorage:WaitForChild("BridgeNet2"):WaitForChild("dataRemoteEvent")
@@ -27,13 +27,21 @@ local function salvarConfig()
     writefile(configFile, HttpService:JSONEncode(config))
 end
 
--- 🔹 AUTO DUNGEON (exemplo adaptado)
+-- 🔹 AUTO DUNGEON (com restauração automática)
 local ativarDungeon = config.AutoDungeon
 
 local tabDungeon = Window:AddTab({
     Title = "Auto Dungeon",
     Icon = "swords"
 })
+
+-- Função simulada de farm (trocar pela real do hub)
+local function atacarMobsDungeon()
+    while ativarDungeon do
+        print("⚔️ Farmando mobs da dungeon...")
+        task.wait(1)
+    end
+end
 
 tabDungeon:AddToggle("ToggleAutoDungeon", {
     Title = "Auto Dungeon",
@@ -45,12 +53,19 @@ tabDungeon:AddToggle("ToggleAutoDungeon", {
         ativarDungeon = state
         if ativarDungeon then
             print("⚔️ Auto Dungeon ativado!")
-            -- aqui vai sua função de entrar dungeon / farmar mobs
+            task.spawn(atacarMobsDungeon)
         else
             print("❌ Auto Dungeon desativado!")
         end
     end
 })
+
+-- 🔥 Restaurar Auto Dungeon se estava ativo no config
+if config.AutoDungeon then
+    ativarDungeon = true
+    print("⚔️ Auto Dungeon restaurado ativo!")
+    task.spawn(atacarMobsDungeon)
+end
 
 -- 🔥 AUTO CASTELO
 local ativarCastelo = config.AutoCastelo
@@ -250,3 +265,11 @@ t:AddToggle("ToggleAutoCastelo", {
         end
     end
 })
+
+-- 🔥 Restaurar Auto Castelo se estava ativo no config
+if config.AutoCastelo then
+    ativarCastelo = true
+    print("🔥 Auto Castelo restaurado ativo!")
+    entrarCastelo()
+    task.spawn(atacarMobsCastelo)
+end
