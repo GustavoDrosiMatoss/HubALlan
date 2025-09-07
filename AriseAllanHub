@@ -477,15 +477,64 @@ local Window = Fluent:CreateWindow({
 })
 
 local Tabs = {
-    Discord = Window:AddTab({ Title = "INFO", Icon = ""}),
+    Discord = Window:AddTab({ Title = "INFO", Icon = "" }),
     Main = Window:AddTab({ Title = "Main", Icon = "" }),
     tp = Window:AddTab({ Title = "Teleports", Icon = "" }),
     mount = Window:AddTab({ Title = "Mount Location/farm", Icon = "" }),
-    dungeon = Window:AddTab({ Title = "Dungeon ", Icon = "" }),
+    dungeon = Window:AddTab({ Title = "Dungeon", Icon = "" }),
+    castelo = Window:AddTab({ Title = "Castelo Infernal", Icon = "home" }),
     shop = Window:AddTab({ Title = "Shop", Icon = "" }),
     Player = Window:AddTab({ Title = "Player", Icon = "" }),
     Settings = Window:AddTab({ Title = "Settings", Icon = "settings" })
 }
+
+-- 🔹 Aqui já podemos adicionar os botões do Castelo
+Tabs.castelo:AddDropdown("AndarEntrada", {
+    Title = "Selecionar Andar de Entrada",
+    Values = {"10","20","30","40","50","60","70","80","90","100","110"},
+    Default = tostring(config.AndarEntrada or 10),
+    Callback = function(value)
+        config.AndarEntrada = tonumber(value)
+        salvarConfig()
+    end
+})
+
+Tabs.castelo:AddDropdown("AndarSaida", {
+    Title = "Selecionar Andar de Saída",
+    Values = (function()
+        local t = {}
+        for i=1,117 do table.insert(t, tostring(i)) end
+        return t
+    end)(),
+    Default = tostring(config.AndarSaida or 1),
+    Callback = function(value)
+        config.AndarSaida = tonumber(value)
+        salvarConfig()
+    end
+})
+
+Tabs.castelo:AddToggle("ToggleAutoLeave", {
+    Title = "Auto Leave Castelo",
+    Default = config.AutoLeave,
+    Callback = function(state)
+        config.AutoLeave = state
+        salvarConfig()
+    end
+})
+
+Tabs.castelo:AddToggle("ToggleAutoCastelo", {
+    Title = "Auto Castelo Infernal",
+    Default = config.AutoCastelo,
+    Callback = function(state)
+        config.AutoCastelo = state
+        salvarConfig()
+        if state then
+            print("🔥 Auto Castelo ativado!")
+        else
+            print("🛑 Auto Castelo desativado!")
+        end
+    end
+})
 
 -- Tạo mapping giữa các map và danh sách mob tương ứng
 local mobsByWorld = {
