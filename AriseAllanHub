@@ -472,7 +472,7 @@ local Window = Fluent:CreateWindow({
     TabWidth = 140,
     Size = UDim2.fromOffset(450, 350),
     Acrylic = false,
-    Theme = "Amethyst",
+    Theme = "Luffy",
     MinimizeKey = Enum.KeyCode.LeftControl
 })
 
