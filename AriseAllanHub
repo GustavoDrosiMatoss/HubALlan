@@ -477,11 +477,12 @@ local Window = Fluent:CreateWindow({
 })
 
 local Tabs = {
-    Discord = Window:AddTab({ Title = "INFO", Icon = ""}),
+    Discord = Window:AddTab({ Title = "INFO", Icon = "" }),
     Main = Window:AddTab({ Title = "Main", Icon = "" }),
     tp = Window:AddTab({ Title = "Teleports", Icon = "" }),
     mount = Window:AddTab({ Title = "Mount Location/farm", Icon = "" }),
-    dungeon = Window:AddTab({ Title = "Dungeon ", Icon = "" }),
+    dungeon = Window:AddTab({ Title = "Dungeon", Icon = "" }),
+    castelo = Window:AddTab({ Title = "Castelo Infernal", Icon = "home" }), -- 👈 AQUI
     shop = Window:AddTab({ Title = "Shop", Icon = "" }),
     Player = Window:AddTab({ Title = "Player", Icon = "" }),
     Settings = Window:AddTab({ Title = "Settings", Icon = "settings" })
