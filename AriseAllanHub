@@ -2537,7 +2537,7 @@ Tabs.dungeon:AddToggle("TeleportMobs", {
     end
 })
 
--- ================== Auto Castelo (integrado na aba Auto Dungeon) ==================
+-- ================== Auto Castelo (em aba separada) ==================
 do
     local ativarCastelo = config.AutoCastelo or false
     local ativarAutoLeave = config.AutoLeave or false
@@ -2545,9 +2545,14 @@ do
     local andarSaida = config.AndarSaida or 1
     local currentFloor = 0
 
+    local tabCastelo = Window:AddTab({
+        Title = "Auto Castelo",
+        Icon = "home"
+    })
+
     -- Dropdown Andar Entrada
-    tabDungeon:AddDropdown("AndarEntrada", {
-        Title = "Castelo - Andar de Entrada",
+    tabCastelo:AddDropdown("AndarEntrada", {
+        Title = "Andar de Entrada",
         Values = (function()
             local vals = {}
             for i = 10,110,10 do table.insert(vals,tostring(i)) end
@@ -2559,13 +2564,13 @@ do
             andarEntrada = tonumber(val)
             config.AndarEntrada = andarEntrada
             salvarConfig()
-            print("⚔️ Andar de entrada do castelo:",andarEntrada)
+            print("⚔️ Andar de entrada:",andarEntrada)
         end
     })
 
-    -- Dropdown Andar Saida
-    tabDungeon:AddDropdown("AndarSaida", {
-        Title = "Castelo - Andar de Saída",
+    -- Dropdown Andar Saída
+    tabCastelo:AddDropdown("AndarSaida", {
+        Title = "Andar de Saída",
         Values = (function()
             local vals = {}
             for i = 1,117 do table.insert(vals,tostring(i)) end
@@ -2577,13 +2582,13 @@ do
             andarSaida = tonumber(val)
             config.AndarSaida = andarSaida
             salvarConfig()
-            print("🚪 Andar de saída do castelo:",andarSaida)
+            print("🚪 Andar de saída:",andarSaida)
         end
     })
 
     -- Toggle Auto Leave
-    tabDungeon:AddToggle("ToggleAutoLeave", {
-        Title = "Castelo - Auto Leave",
+    tabCastelo:AddToggle("ToggleAutoLeave", {
+        Title = "Auto Leave",
         Default = ativarAutoLeave,
         Callback = function(state)
             ativarAutoLeave = state
@@ -2666,8 +2671,8 @@ do
     end)
 
     -- Toggle Auto Castelo
-    tabDungeon:AddToggle("ToggleAutoCastelo", {
-        Title = "Castelo - Auto Castelo",
+    tabCastelo:AddToggle("ToggleAutoCastelo", {
+        Title = "Auto Castelo",
         Default = ativarCastelo,
         Callback = function(state)
             ativarCastelo = state
