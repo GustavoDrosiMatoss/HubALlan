@@ -477,137 +477,7 @@ local Window = Fluent:CreateWindow({
 })
 
 local Tabs = {
-    Discord = Window:AddTab({ Title = "INFO", Icon = ""}
-
--- ================== Auto Castelo Infernal ==================
-do
-    local andarEntrada = config.AndarEntrada or 10
-    local andarSaida = config.AndarSaida or 1
-    local ativarCastelo = config.AutoCastelo or false
-    local ativarAutoLeave = config.AutoLeave or false
-    local currentFloor = 0
-
-    local andaresEntrada = {}
-    for i = 10, 110, 10 do table.insert(andaresEntrada, tostring(i)) end
-
-    local andaresSaida = {}
-    for i = 1, 117 do table.insert(andaresSaida, tostring(i)) end
-
-    -- Funções Castelo
-    local function entrarCastelo()
-        local args = {
-            [1] = {
-                [1] = {
-                    ["Check"] = true,
-                    ["Floor"] = tostring(andarEntrada),
-                    ["Event"] = "CastleAction",
-                    ["Action"] = "Join"
-                },
-                [2] = "\\12"
-            }
-        }
-        remote:FireServer(unpack(args))
-        print("✅ Entrando no andar " .. andarEntrada)
-    end
-
-    local function sairCastelo()
-        local args = {
-            [1] = {
-                [1] = {
-                    ["Check"] = true,
-                    ["Floor"] = tostring(andarSaida),
-                    ["Event"] = "CastleAction",
-                    ["Action"] = "LeaveDungeon"
-                },
-                [2] = "\\12"
-            }
-        }
-        remote:FireServer(unpack(args))
-        print("❌ Saindo no andar " .. andarSaida)
-    end
-
-    local function atacarMobsCastelo()
-        while ativarCastelo do
-            print("⚔️ Farmando mobs do castelo...")
-            task.wait(1)
-        end
-    end
-
-    -- UI Castelo
-    Tabs.castelo:AddDropdown("AndarEntrada", {
-        Title = "Selecionar Andar de Entrada",
-        Values = andaresEntrada,
-        Default = tostring(andarEntrada),
-        Callback = function(value)
-            andarEntrada = tonumber(value)
-            config.AndarEntrada = andarEntrada
-            salvarConfig()
-            print("Castelo: Andar de entrada selecionado -> " .. andarEntrada)
-        end
-    })
-
-    Tabs.castelo:AddDropdown("AndarSaida", {
-        Title = "Selecionar Andar de Saída",
-        Values = andaresSaida,
-        Default = tostring(andarSaida),
-        Callback = function(value)
-            andarSaida = tonumber(value)
-            config.AndarSaida = andarSaida
-            salvarConfig()
-            print("Castelo: Andar de saída selecionado -> " .. andarSaida)
-        end
-    })
-
-    Tabs.castelo:AddToggle("ToggleAutoLeave", {
-        Title = "Auto Leave Castelo",
-        Default = ativarAutoLeave,
-        Callback = function(state)
-            ativarAutoLeave = state
-            config.AutoLeave = state
-            salvarConfig()
-            print("Castelo: Auto Leave " .. (state and "ativado" or "desativado"))
-        end
-    })
-
-    Tabs.castelo:AddToggle("ToggleAutoCastelo", {
-        Title = "Auto Castelo Infernal",
-        Default = ativarCastelo,
-        Callback = function(state)
-            ativarCastelo = state
-            config.AutoCastelo = state
-            salvarConfig()
-            if state then
-                print("🔥 Auto Castelo ativado!")
-                entrarCastelo()
-                task.spawn(atacarMobsCastelo)
-            else
-                print("🛑 Auto Castelo desativado!")
-            end
-        end
-    })
-
-    -- Monitora evento de andar atual e aplica AutoLeave
-    remote.OnClientEvent:Connect(function(data)
-        if typeof(data)=="table" and data[1] and data[1]["Event"]=="PortalAction" then
-            local andar = tonumber(data[1]["Floor"])
-            if andar then
-                currentFloor = andar
-                print("📍 Castelo: Andar atual -> " .. currentFloor)
-                if ativarCastelo and ativarAutoLeave and andar==andarSaida then
-                    sairCastelo()
-                end
-            end
-        end
-    end)
-
-    if config.AutoCastelo then
-        entrarCastelo()
-        task.spawn(atacarMobsCastelo)
-    end
-end
--- ============================================================
-
-),
+    Discord = Window:AddTab({ Title = "INFO", Icon = ""}),
     Main = Window:AddTab({ Title = "Main", Icon = "" }),
     tp = Window:AddTab({ Title = "Teleports", Icon = "" }),
     mount = Window:AddTab({ Title = "Mount Location/farm", Icon = "" }),
@@ -2666,3 +2536,131 @@ Tabs.dungeon:AddToggle("TeleportMobs", {
         end
     end
 })
+
+-- ================== Auto Castelo Infernal ==================
+do
+    local andarEntrada = config.AndarEntrada or 10
+    local andarSaida = config.AndarSaida or 1
+    local ativarCastelo = config.AutoCastelo or false
+    local ativarAutoLeave = config.AutoLeave or false
+    local currentFloor = 0
+
+    local andaresEntrada = {}
+    for i = 10, 110, 10 do table.insert(andaresEntrada, tostring(i)) end
+
+    local andaresSaida = {}
+    for i = 1, 117 do table.insert(andaresSaida, tostring(i)) end
+
+    -- Funções Castelo
+    local function entrarCastelo()
+        local args = {
+            [1] = {
+                [1] = {
+                    ["Check"] = true,
+                    ["Floor"] = tostring(andarEntrada),
+                    ["Event"] = "CastleAction",
+                    ["Action"] = "Join"
+                },
+                [2] = "\\12"
+            }
+        }
+        remote:FireServer(unpack(args))
+        print("✅ Entrando no andar " .. andarEntrada)
+    end
+
+    local function sairCastelo()
+        local args = {
+            [1] = {
+                [1] = {
+                    ["Check"] = true,
+                    ["Floor"] = tostring(andarSaida),
+                    ["Event"] = "CastleAction",
+                    ["Action"] = "LeaveDungeon"
+                },
+                [2] = "\\12"
+            }
+        }
+        remote:FireServer(unpack(args))
+        print("❌ Saindo no andar " .. andarSaida)
+    end
+
+    local function atacarMobsCastelo()
+        while ativarCastelo do
+            print("⚔️ Farmando mobs do castelo...")
+            task.wait(1)
+        end
+    end
+
+    -- UI Castelo
+    Tabs.castelo:AddDropdown("AndarEntrada", {
+        Title = "Selecionar Andar de Entrada",
+        Values = andaresEntrada,
+        Default = tostring(andarEntrada),
+        Callback = function(value)
+            andarEntrada = tonumber(value)
+            config.AndarEntrada = andarEntrada
+            salvarConfig()
+            print("Castelo: Andar de entrada selecionado -> " .. andarEntrada)
+        end
+    })
+
+    Tabs.castelo:AddDropdown("AndarSaida", {
+        Title = "Selecionar Andar de Saída",
+        Values = andaresSaida,
+        Default = tostring(andarSaida),
+        Callback = function(value)
+            andarSaida = tonumber(value)
+            config.AndarSaida = andarSaida
+            salvarConfig()
+            print("Castelo: Andar de saída selecionado -> " .. andarSaida)
+        end
+    })
+
+    Tabs.castelo:AddToggle("ToggleAutoLeave", {
+        Title = "Auto Leave Castelo",
+        Default = ativarAutoLeave,
+        Callback = function(state)
+            ativarAutoLeave = state
+            config.AutoLeave = state
+            salvarConfig()
+            print("Castelo: Auto Leave " .. (state and "ativado" or "desativado"))
+        end
+    })
+
+    Tabs.castelo:AddToggle("ToggleAutoCastelo", {
+        Title = "Auto Castelo Infernal",
+        Default = ativarCastelo,
+        Callback = function(state)
+            ativarCastelo = state
+            config.AutoCastelo = state
+            salvarConfig()
+            if state then
+                print("🔥 Auto Castelo ativado!")
+                entrarCastelo()
+                task.spawn(atacarMobsCastelo)
+            else
+                print("🛑 Auto Castelo desativado!")
+            end
+        end
+    })
+
+    -- Monitora evento de andar atual e aplica AutoLeave
+    remote.OnClientEvent:Connect(function(data)
+        if typeof(data)=="table" and data[1] and data[1]["Event"]=="PortalAction" then
+            local andar = tonumber(data[1]["Floor"])
+            if andar then
+                currentFloor = andar
+                print("📍 Castelo: Andar atual -> " .. currentFloor)
+                if ativarCastelo and ativarAutoLeave and andar==andarSaida then
+                    sairCastelo()
+                end
+            end
+        end
+    end)
+
+    if config.AutoCastelo then
+        entrarCastelo()
+        task.spawn(atacarMobsCastelo)
+    end
+end
+-- ============================================================
