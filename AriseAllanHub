@@ -487,12 +487,12 @@ do
     local ativarAutoLeave = config.AutoLeave or false
     local currentFloor = 0
 
-    -- Funções entrar/sair castelo
+    -- Funções entrar/sair
     local function entrarCastelo()
         local args = {
             [1] = {
                 [1] = { ["Check"]=true, ["Floor"]=tostring(andarEntrada), ["Event"]="CastleAction", ["Action"]="Join" },
-                [2] = "\\12"
+                [2] = "\12"
             }
         }
         remote:FireServer(unpack(args))
@@ -503,14 +503,14 @@ do
         local args = {
             [1] = {
                 [1] = { ["Check"]=true, ["Floor"]=tostring(andarSaida), ["Event"]="CastleAction", ["Action"]="LeaveDungeon" },
-                [2] = "\\12"
+                [2] = "\12"
             }
         }
         remote:FireServer(unpack(args))
         print("❌ Saindo no andar " .. andarSaida)
     end
 
-    -- Monitorar FirePortal e andar atual
+    -- Monitorar FirePortal
     local function monitorarFirePortal()
         task.spawn(function()
             while ativarCastelo do
@@ -549,60 +549,31 @@ do
                     if room and room:FindFirstChild("FirePortal") then
                         portal = room:FindFirstChild("FirePortal")
                         currentFloor = i
-                        print("📍 ANDAR ATUAL: " .. i .. " | Próximo: " .. (i+1))
                         break
                     end
                 end
             end
         end
-
         if not portal then
-            warn("⚠️ FirePortal não encontrado (andar máximo ou fora do castelo)")
+            warn("⚠️ FirePortal não encontrado")
             return
         end
-
-        local player = game.Players.LocalPlayer
-        local char = player.Character or player.CharacterAdded:Wait()
-        local hrp = char:WaitForChild("HumanoidRootPart")
-
+        local hrp = game.Players.LocalPlayer.Character:WaitForChild("HumanoidRootPart")
         hrp.CFrame = portal.CFrame
         hrp.Velocity = Vector3.zero
         task.wait(0.1)
-
         local prompt = portal:FindFirstChildOfClass("ProximityPrompt")
-        if not prompt then
-            for _, obj in ipairs(portal:GetDescendants()) do
-                if obj:IsA("ProximityPrompt") then
-                    prompt = obj
-                    break
-                end
-            end
-        end
-
-        if not prompt and portal.Parent then
-            prompt = portal.Parent:FindFirstChildOfClass("ProximityPrompt")
-        end
-
         if prompt then
-            for i = 1, 3 do
-                fireproximityprompt(prompt)
-                task.wait(0.05)
-            end
-            print("🚀 Subindo do andar " .. currentFloor .. " para " .. (currentFloor+1))
-        else
-            warn("⚠️ Nenhum ProximityPrompt encontrado no FirePortal")
+            for i = 1, 3 do fireproximityprompt(prompt) task.wait(0.05) end
+            print("🚀 Subindo para o próximo andar")
         end
     end
 
-    -- Farmar mobs
+    -- Farm
     local function atacarMobsCastelo()
         while ativarCastelo do
             local target = getNearestEnemy and getNearestEnemy()
             if target and target.Parent then
-                if anticheat then pcall(anticheat) end
-                if moveToTarget then pcall(moveToTarget, target) end
-                task.wait(0.3)
-                if fireShowPetsRemote then pcall(fireShowPetsRemote) end
                 remote:FireServer({
                     {
                         ["PetPos"] = {},
@@ -610,7 +581,7 @@ do
                         ["Event"] = "Attack",
                         ["Enemy"] = target.Name
                     },
-                    "\\7"
+                    "\7"
                 })
                 while ativarCastelo and target.Parent and not (isEnemyDead and isEnemyDead(target)) do
                     task.wait(0.1)
@@ -630,12 +601,9 @@ do
             config.AutoCastelo = state
             salvarConfig()
             if state then
-                print("🔥 Auto Castelo ativado!")
                 entrarCastelo()
                 task.spawn(atacarMobsCastelo)
                 monitorarFirePortal()
-            else
-                print("🛑 Auto Castelo desativado!")
             end
         end
     })
@@ -652,9 +620,7 @@ do
 
     Tabs.castelo:AddButton({
         Title = "Subir de Andar (Ativar Portal)",
-        Callback = function()
-            ativarPortal()
-        end
+        Callback = ativarPortal
     })
 end
 -- ============================================================
