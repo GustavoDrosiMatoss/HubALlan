@@ -2806,15 +2806,31 @@ Tabs.dungeon:AddToggle("AutoCastle", {
     end
 })
 
--- Variável global para controle
+-- ==========================
+-- Auto Castle (Auto INF) com salvamento
+-- ==========================
+
+-- Variáveis globais
 local castleEnabled = false
 local lastUsedFloor = nil
+
+-- Suporte no ConfigSystem
+if ConfigSystem.DefaultConfig.CastleINF == nil then
+    ConfigSystem.DefaultConfig.CastleINF = false
+end
+if ConfigSystem.CurrentConfig.CastleINF == nil then
+    ConfigSystem.CurrentConfig.CastleINF = ConfigSystem.DefaultConfig.CastleINF
+end
+
 -- Toggle na aba Dungeon
 Tabs.dungeon:AddToggle("AutoCastle", {
     Title = "Auto INF (Castle Farm)",
-    Default = false,
+    Default = ConfigSystem.CurrentConfig.CastleINF or false,
     Callback = function(state)
         castleEnabled = state
+        ConfigSystem.CurrentConfig.CastleINF = state
+        ConfigSystem.SaveConfig()
+
         if state then
             Fluent:Notify({
                 Title = "Auto Castle Ativado",
@@ -2829,17 +2845,14 @@ Tabs.dungeon:AddToggle("AutoCastle", {
                 local world = main.__World
                 local lastUsedFloor = nil
 
-                -- funções auxiliares (as mesmas que já te mandei)
+                -- funções auxiliares
                 local function getClosestEnemy()
-                    local closestEnemy = nil
-                    local closestDistance = math.huge
+                    local closestEnemy, closestDistance = nil, math.huge
                     local playerCharacter = player.Character
-
                     if not playerCharacter or not playerCharacter:FindFirstChild("HumanoidRootPart") then 
                         return nil 
                     end
                     local playerPosition = playerCharacter.HumanoidRootPart.Position
-
                     for _, enemy in pairs(enemiesFolder:GetChildren()) do
                         local hp = enemy:GetAttribute("HP")
                         if hp and hp > 0 and enemy.Position then
@@ -2850,7 +2863,6 @@ Tabs.dungeon:AddToggle("AutoCastle", {
                             end
                         end
                     end
-
                     return closestEnemy
                 end
 
@@ -2948,7 +2960,6 @@ Tabs.dungeon:AddToggle("AutoCastle", {
         end
     end
 })
-
 
 -- ============================
 -- Auto Castle (com detecção via Room)
