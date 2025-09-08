@@ -2548,6 +2548,7 @@ Tabs.dungeon:AddToggle("TeleportMobs", {
                 local player = game.Players.LocalPlayer
                 local enemiesFolder = workspace.__Main.__Enemies.Server
                 local currentTween = nil
+                local lastUsedFloor = nil -- guarda o último andar em que o portal foi ativado
 
                 local function getDistance(pos1, pos2)
                     return (pos1 - pos2).Magnitude
@@ -2604,13 +2605,7 @@ Tabs.dungeon:AddToggle("TeleportMobs", {
                     return true
                 end
 
-                local function teleportToFirePortal()
-                    local char = player.Character
-                    if not char or not char:FindFirstChild("HumanoidRootPart") then
-                        return false
-                    end
-
-                    local hrp = char.HumanoidRootPart
+                local function findFirePortal()
                     local main = workspace.__Main
                     local world = main.__World
                     local portal, currentFloor = nil, nil
@@ -2627,8 +2622,25 @@ Tabs.dungeon:AddToggle("TeleportMobs", {
                         end
                     end
 
+                    return portal, currentFloor
+                end
+
+                local function teleportToFirePortal()
+                    local char = player.Character
+                    if not char or not char:FindFirstChild("HumanoidRootPart") then
+                        return false
+                    end
+
+                    local hrp = char.HumanoidRootPart
+                    local portal, currentFloor = findFirePortal()
+
                     if not portal then
                         warn("FirePortal não encontrado!")
+                        return false
+                    end
+
+                    -- só usa se for andar diferente do último
+                    if lastUsedFloor == currentFloor then
                         return false
                     end
 
@@ -2639,25 +2651,14 @@ Tabs.dungeon:AddToggle("TeleportMobs", {
                     return true, currentFloor
                 end
 
-                local function activateFirePortal()
-                    local main = workspace.__Main
-                    local world = main.__World
-                    local portal, currentFloor = nil, nil
-
-                    for i = 1, 200 do
-                        local room = world:FindFirstChild("Room_" .. i)
-                        if room then
-                            local foundPortal = room:FindFirstChild("FirePortal")
-                            if foundPortal then
-                                portal = foundPortal
-                                currentFloor = i
-                                break
-                            end
-                        end
-                    end
-
+                local function activateFirePortal(currentFloor)
+                    local portal, floor = findFirePortal()
                     if not portal then
                         return false
+                    end
+
+                    if floor ~= currentFloor then
+                        return false -- segurança extra
                     end
 
                     local prompt = portal:FindFirstChildOfClass("ProximityPrompt")
@@ -2679,6 +2680,7 @@ Tabs.dungeon:AddToggle("TeleportMobs", {
                             fireproximityprompt(prompt)
                             task.wait(0.05)
                         end
+                        lastUsedFloor = currentFloor -- salva andar usado
                         print("Portal ativado! Subindo do andar " .. currentFloor .. " para o andar " .. (currentFloor + 1))
                         return true
                     else
@@ -2700,7 +2702,7 @@ Tabs.dungeon:AddToggle("TeleportMobs", {
                             end
                         end
                     else
-                        -- só vai pro portal se realmente não houver nenhum inimigo vivo
+                        -- só vai pro portal se realmente não houver inimigo vivo
                         local enemiesAlive = false
                         for _, e in pairs(enemiesFolder:GetChildren()) do
                             if e:GetAttribute("HP") and e:GetAttribute("HP") > 0 then
@@ -2712,8 +2714,8 @@ Tabs.dungeon:AddToggle("TeleportMobs", {
                         if not enemiesAlive then
                             local success, floor = teleportToFirePortal()
                             if success then
-                                activateFirePortal()
-                                task.wait(2) -- tempo para carregar o próximo andar
+                                activateFirePortal(floor)
+                                task.wait(2)
                             end
                         end
                     end
