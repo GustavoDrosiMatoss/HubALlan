@@ -3052,106 +3052,171 @@ end
 
 
 
--- =========================================
--- Castle Portal Climber (Nearest NPC + FirePortal)
--- =========================================
+-- ============================
+-- Auto Castle (com detecção via Room)
+-- ============================
 
-castleClimbEnabled = false
+castleEnabled = false
+local castleSessionActive = false
 
--- Função para pegar mob mais próximo
-local function getNearestMob()
-    local plr = game.Players.LocalPlayer
-    if not plr.Character or not plr.Character:FindFirstChild("HumanoidRootPart") then return nil end
-    local hrp = plr.Character.HumanoidRootPart
+-- Configuração do andar de saída (padrão 101)
+ConfigSystem.DefaultConfig.CastleExitFloor = ConfigSystem.DefaultConfig.CastleExitFloor or 101
+ConfigSystem.CurrentConfig.CastleExitFloor = ConfigSystem.CurrentConfig.CastleExitFloor or ConfigSystem.DefaultConfig.CastleExitFloor
+local exitFloor = ConfigSystem.CurrentConfig.CastleExitFloor
 
-    local nearest, dist = nil, math.huge
-    local mobsFolder = workspace:FindFirstChild("Enemies") or workspace:FindFirstChild("Mobs")
-    if mobsFolder then
-        for _, mob in pairs(mobsFolder:GetChildren()) do
-            local mobHrp = mob:FindFirstChild("HumanoidRootPart")
-            local hum = mob:FindFirstChild("Humanoid")
-            if mobHrp and hum and hum.Health > 0 then
-                local d = (mobHrp.Position - hrp.Position).Magnitude
-                if d < dist then
-                    dist = d
-                    nearest = mob
-                end
-            end
+Tabs.dungeon:AddInput("CastleExitFloor", {
+    Title = "Castle Exit Floor",
+    Default = tostring(exitFloor),
+    Placeholder = "Andar para sair",
+    Numeric = true,
+    Finished = true,
+    Callback = function(value)
+        local floor = tonumber(value)
+        if floor and floor > 0 then
+            exitFloor = floor
+            ConfigSystem.CurrentConfig.CastleExitFloor = floor
+            ConfigSystem.SaveConfig()
         end
     end
-    return nearest
-end
+})
 
--- Função para detectar FirePortal do andar atual
-local function getCurrentFirePortal()
+-- Detectar andar atual pelo Room
+local function getCurrentCastleFloor()
     local main = workspace:FindFirstChild("__Main")
     if not main then return nil end
     local world = main:FindFirstChild("__World")
     if not world then return nil end
 
-    for i = 200, 1, -1 do
-        local room = world:FindFirstChild("Room_" .. i)
-        if room and room:FindFirstChild("FirePortal") then
-            return room.FirePortal, i
+    local current = nil
+    for i = 1, 200 do
+        if world:FindFirstChild("Room_" .. i) then
+            current = i
         end
     end
-    return nil, nil
+    return current
 end
 
--- Loop do Castle Climber
-local function autoClimbCastle()
+-- Loop do Auto Castle
+function autoCastle()
     task.spawn(function()
-        while castleClimbEnabled do
-            local mob = getNearestMob()
-            if mob then
-                local hrp = mob:FindFirstChild("HumanoidRootPart")
-                if hrp then
-                    -- Voar até mob mais próximo
-                    TweenTo(hrp.CFrame * CFrame.new(0, 3, 0))
-                end
-                -- Atacar mob
-                pcall(function()
-                    remote:FireServer("Attack", mob)
-                end)
-            else
-                -- Sem mobs -> procurar FirePortal
-                local portal, floor = getCurrentFirePortal()
-                if portal then
-                    TweenTo(portal.CFrame * CFrame.new(0, 3, 0))
-                    pcall(function()
-                        fireproximityprompt(portal.ProximityPrompt)
-                    end)
-                    Fluent:Notify({
-                        Title = "Castle Climber",
-                        Content = "Subindo para o próximo andar (" .. tostring((floor or 0) + 1) .. ")",
-                        Duration = 3
-                    })
-                    task.wait(3)
+        while castleEnabled do
+            -- Detectar andar atual
+            local currentFloor = getCurrentCastleFloor()
+            if currentFloor and currentFloor >= exitFloor then
+                -- Sai do Castle
+                local leaveArgs = {
+                    [1] = {
+                        [1] = { ["Event"] = "LeaveDungeon" },
+                        [2] = "\12"
+                    }
+                }
+                pcall(function() remote:FireServer(unpack(leaveArgs)) end)
+
+                Fluent:Notify({
+                    Title = "Castle",
+                    Content = "Saiu no andar " .. tostring(exitFloor) .. ", reiniciando...",
+                    Duration = 3
+                })
+
+                task.wait(3)
+
+                -- Entrar novamente no andar inicial
+                local joinArgs = {
+                    [1] = {
+                        [1] = {
+                            ["Check"] = true,
+                            ["Floor"] = tostring(ConfigSystem.CurrentConfig.EntryFloor or 1),
+                            ["Event"] = "CastleAction",
+                            ["Action"] = "Join"
+                        },
+                        [2] = "\12"
+                    }
+                }
+                pcall(function() remote:FireServer(unpack(joinArgs)) end)
+                task.wait(2)
+            end
+
+            -- Farm normal de mobs
+            local mobsFolder = workspace:FindFirstChild("Enemies") or workspace:FindFirstChild("Mobs")
+            if mobsFolder then
+                for _, mob in pairs(mobsFolder:GetChildren()) do
+                    if not castleEnabled then break end
+                    local hrp = mob:FindFirstChild("HumanoidRootPart")
+                    local hum = mob:FindFirstChild("Humanoid")
+                    if hrp and hum and hum.Health > 0 then
+                        local plr = game.Players.LocalPlayer
+                        if plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
+                            plr.Character.HumanoidRootPart.CFrame = hrp.CFrame * CFrame.new(0, 3, 0)
+                        end
+                        pcall(function()
+                            remote:FireServer("Attack", mob)
+                        end)
+                        task.wait(0.25)
+                    end
                 end
             end
-            task.wait(0.5)
+
+            task.wait(0.4)
         end
     end)
 end
 
-Tabs.dungeon:AddToggle("CastleClimbToggle", {
-    Title = "Castle Portal Climber",
-    Default = false,
+-- Toggle Auto Castle
+Tabs.dungeon:AddToggle("CastleToggle", {
+    Title = "Auto Castle",
+    Default = ConfigSystem.CurrentConfig.CastleToggle or false,
     Callback = function(state)
-        castleClimbEnabled = state
+        castleEnabled = state
+        ConfigSystem.CurrentConfig.CastleToggle = state
+        ConfigSystem.SaveConfig()
+
         if state then
-            autoClimbCastle()
-            Fluent:Notify({
-                Title = "Castle Climber",
-                Content = "Ativado - irá matar mobs e subir pelos portais",
-                Duration = 3
-            })
+            task.spawn(function()
+                -- Join Castle Infernal
+                local joinArgs = {
+                    [1] = {
+                        [1] = {
+                            ["Check"] = true,
+                            ["Floor"] = tostring(ConfigSystem.CurrentConfig.EntryFloor or 1),
+                            ["Event"] = "CastleAction",
+                            ["Action"] = "Join"
+                        },
+                        [2] = "\12"
+                    }
+                }
+                pcall(function() remote:FireServer(unpack(joinArgs)) end)
+                task.wait(1)
+
+                castleSessionActive = true
+                autoCastle()
+
+                pcall(function()
+                    Fluent:Notify({
+                        Title = "Castle Ativado",
+                        Content = "Castle iniciado no andar " .. tostring(ConfigSystem.CurrentConfig.EntryFloor or 1) .. " (sairá no " .. tostring(exitFloor) .. ")",
+                        Duration = 3
+                    })
+                end)
+            end)
         else
-            Fluent:Notify({
-                Title = "Castle Climber",
-                Content = "Desativado",
-                Duration = 3
-            })
+            if castleSessionActive then
+                local leaveArgs = {
+                    [1] = {
+                        [1] = { ["Event"] = "LeaveDungeon" },
+                        [2] = "\12"
+                    }
+                }
+                pcall(function() remote:FireServer(unpack(leaveArgs)) end)
+                castleSessionActive = false
+            end
+
+            pcall(function()
+                Fluent:Notify({
+                    Title = "Castle Desativado",
+                    Content = "Saiu do Castle.",
+                    Duration = 3
+                })
+            end)
         end
     end
 })
