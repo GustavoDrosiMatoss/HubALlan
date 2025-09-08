@@ -2536,7 +2536,6 @@ Tabs.dungeon:AddToggle("TeleportMobs", {
         end
     end
 })
-
 Tabs.dungeon:AddToggle("TeleportMobs", {
     Title = "Auto INF",
     Default = loadAutoInfState(), -- carrega estado salvo
@@ -2724,6 +2723,7 @@ Tabs.dungeon:AddToggle("TeleportMobs", {
         end
     end
 })
+
 
 -- Sistema de Castelo - Auto Castle atualizado
 local castleEnabled = false
