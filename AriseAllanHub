@@ -2536,6 +2536,7 @@ Tabs.dungeon:AddToggle("TeleportMobs", {
         end
     end
 })
+
 Tabs.dungeon:AddToggle("TeleportMobs", {
     Title = "Auto INF",
     Default = loadAutoInfState(), -- carrega estado salvo
