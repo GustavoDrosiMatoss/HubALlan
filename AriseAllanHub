@@ -1,7 +1,9 @@
-if not game or not game:IsA("DataModel") then
-    warn("Ambiente do jogo não está disponível.")
-    return
-end
+repeat task.wait() until game and game:IsLoaded()
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TweenService = game:GetService("TweenService")
+local workspace = game:GetService("Workspace")
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
