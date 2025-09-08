@@ -1,4 +1,4 @@
-if not game or typeof(game.GetService) ~= "function" then
+if not game or not game:IsA("DataModel") then
     warn("Ambiente do jogo não está disponível.")
     return
 end
