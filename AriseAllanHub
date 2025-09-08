@@ -2536,55 +2536,36 @@ Tabs.dungeon:AddToggle("TeleportMobs", {
         end
     end
 })
--- Arquivo para salvar o estado do Auto INF
-local autoInfFile = "auto_inf_state.txt"
+-- ============================
+-- Auto INF (Teleport Mobs + FirePortal)
+-- ============================
 
--- Função para salvar estado
-local function saveAutoInfState(state)
-    if writefile then
-        writefile(autoInfFile, state and "true" or "false")
-    end
+-- Suporte no ConfigSystem
+if ConfigSystem.DefaultConfig.AutoINF == nil then
+    ConfigSystem.DefaultConfig.AutoINF = false
+end
+if ConfigSystem.CurrentConfig.AutoINF == nil then
+    ConfigSystem.CurrentConfig.AutoINF = ConfigSystem.DefaultConfig.AutoINF
 end
 
--- Função para carregar estado
-local function loadAutoInfState()
-    if isfile and readfile and isfile(autoInfFile) then
-        local data = readfile(autoInfFile)
-        return data == "true"
-    end
-    return false
-end
+local teleportEnabled = false
+local lastUsedFloor = nil
+
 Tabs.dungeon:AddToggle("TeleportMobs", {
     Title = "Auto INF",
-    Default = loadAutoInfState(), -- carrega estado salvo
+    Default = ConfigSystem.CurrentConfig.AutoINF or false,
     Flag = "AutoFarmDungeon",
     Callback = function(state)
         teleportEnabled = state
-        saveAutoInfState(state) -- salva sempre que ativar/desativar
+        ConfigSystem.CurrentConfig.AutoINF = state
+        ConfigSystem.SaveConfig()
 
         if state then
             task.spawn(function()
                 local player = game.Players.LocalPlayer
                 local enemiesFolder = workspace.__Main.__Enemies.Server
-                local lastUsedFloor = nil
-                local floorFile = "last_floor.txt"
 
-                -- carregar último andar salvo
-                if isfile and readfile and isfile(floorFile) then
-                    local data = tonumber(readfile(floorFile))
-                    if data then
-                        lastUsedFloor = data
-                        print("Último andar salvo carregado:", lastUsedFloor)
-                    end
-                end
-
-                local function saveFloor(floor)
-                    if writefile then
-                        writefile(floorFile, tostring(floor))
-                        print("Andar salvo:", floor)
-                    end
-                end
-
+                -- funções auxiliares
                 local function getClosestEnemy()
                     local closestEnemy = nil
                     local closestDistance = math.huge
@@ -2616,8 +2597,7 @@ Tabs.dungeon:AddToggle("TeleportMobs", {
                     if not playerCharacter or not root then
                         return false
                     end
-
-                    -- teleporte direto (3 studs acima do inimigo)
+                    -- teleporta direto acima do inimigo
                     playerCharacter.HumanoidRootPart.CFrame = root.CFrame + Vector3.new(0, 3, 0)
                     return true
                 end
@@ -2669,11 +2649,7 @@ Tabs.dungeon:AddToggle("TeleportMobs", {
 
                 local function activateFirePortal(currentFloor)
                     local portal, floor = findFirePortal()
-                    if not portal then
-                        return false
-                    end
-
-                    if floor ~= currentFloor then
+                    if not portal or floor ~= currentFloor then
                         return false
                     end
 
@@ -2697,13 +2673,50 @@ Tabs.dungeon:AddToggle("TeleportMobs", {
                             task.wait(0.05)
                         end
                         lastUsedFloor = currentFloor
-                        saveFloor(currentFloor)
                         print("Portal ativado! Subindo do andar " .. currentFloor .. " para o andar " .. (currentFloor + 1))
                         return true
                     else
                         warn("ProximityPrompt não encontrado!")
                         return false
                     end
+                end
+
+                -- loop principal
+                while teleportEnabled do
+                    local enemy = getClosestEnemy()
+
+                    if enemy then
+                        moveToEnemy(enemy)
+                        -- espera até o inimigo morrer
+                        while enemy.Parent and (enemy:GetAttribute("HP") or 1) > 0 and teleportEnabled do
+                            task.wait(0.2)
+                        end
+                    else
+                        -- só vai pro portal se não tiver inimigos vivos
+                        local enemiesAlive = false
+                        for _, e in pairs(enemiesFolder:GetChildren()) do
+                            if e:GetAttribute("HP") and e:GetAttribute("HP") > 0 then
+                                enemiesAlive = true
+                                break
+                            end
+                        end
+
+                        if not enemiesAlive then
+                            local success, floor = teleportToFirePortal()
+                            if success then
+                                activateFirePortal(floor)
+                                task.wait(2) -- dá tempo de carregar próximo andar
+                            end
+                        end
+                    end
+
+                    task.wait(0.2)
+                end
+            end)
+        end
+    end
+})
+
 
 -- Sistema de Castelo - Auto Castle atualizado
 local castleEnabled = false
@@ -2726,88 +2739,97 @@ local function getCurrentFloor()
     end
     return nil
 end
-  local function findFirePortal()
-                    local main = workspace.__Main
-                    local world = main.__World
-                    local portal, currentFloor = nil, nil
 
-                    for i = 1, 200 do
-                        local room = world:FindFirstChild("Room_" .. i)
-                        if room then
-                            local foundPortal = room:FindFirstChild("FirePortal")
-                            if foundPortal then
-                                portal = foundPortal
-                                currentFloor = i
-                                break
-                            end
-                        end
-                    end
+-- Função para teleportar para FirePortal
+local function teleportToFirePortal()
+    local Players = game:GetService("Players")
+    local player = Players.LocalPlayer
+    local char = player.Character
+    if not char or not char:FindFirstChild("HumanoidRootPart") then
+        return false
+    end
+    
+    local hrp = char.HumanoidRootPart
+    local main = workspace.__Main
+    local world = main.__World
+    local portal = nil
+    local currentFloor = nil
+    
+    for i = 1, 200 do
+        local room = world:FindFirstChild("Room_" .. i)
+        if room then
+            local foundPortal = room:FindFirstChild("FirePortal")
+            if foundPortal then
+                portal = foundPortal
+                currentFloor = i
+                break
+            end
+        end
+    end
+    
+    if not portal then
+        warn("FirePortal não encontrado!")
+        return false
+    end
+    
+    hrp.CFrame = portal.CFrame
+    hrp.Velocity = Vector3.zero
+    
+    print("Teleportado para o portal do andar " .. currentFloor)
+    return true, currentFloor
+end
 
-                    return portal, currentFloor
-                end
-
-                local function teleportToFirePortal()
-                    local char = player.Character
-                    if not char or not char:FindFirstChild("HumanoidRootPart") then
-                        return false
-                    end
-
-                    local hrp = char.HumanoidRootPart
-                    local portal, currentFloor = findFirePortal()
-
-                    if not portal then
-                        warn("FirePortal não encontrado!")
-                        return false
-                    end
-
-                    if lastUsedFloor == currentFloor then
-                        return false -- já usado nesse andar
-                    end
-
-                    hrp.CFrame = portal.CFrame
-                    hrp.Velocity = Vector3.zero
-
-                    print("Teleportado para o portal do andar " .. currentFloor)
-                    return true, currentFloor
-                end
-
-                local function activateFirePortal(currentFloor)
-                    local portal, floor = findFirePortal()
-                    if not portal then
-                        return false
-                    end
-
-                    if floor ~= currentFloor then
-                        return false
-                    end
-
-                    local prompt = portal:FindFirstChildOfClass("ProximityPrompt")
-                    if not prompt then
-                        for _, obj in ipairs(portal:GetDescendants()) do
-                            if obj:IsA("ProximityPrompt") then
-                                prompt = obj
-                                break
-                            end
-                        end
-                    end
-
-                    if not prompt and portal.Parent then
-                        prompt = portal.Parent:FindFirstChildOfClass("ProximityPrompt")
-                    end
-
-                    if prompt then
-                        for i = 1, 3 do
-                            fireproximityprompt(prompt)
-                            task.wait(0.05)
-                        end
-                        lastUsedFloor = currentFloor
-                        saveFloor(currentFloor)
-                        print("Portal ativado! Subindo do andar " .. currentFloor .. " para o andar " .. (currentFloor + 1))
-                        return true
-                    else
-                        warn("ProximityPrompt não encontrado!")
-                        return false
-   end
+-- Função para ativar o FirePortal
+local function activateFirePortal()
+    local Players = game:GetService("Players")
+    local player = Players.LocalPlayer
+    local main = workspace.__Main
+    local world = main.__World
+    local portal = nil
+    local currentFloor = nil
+    
+    for i = 1, 200 do
+        local room = world:FindFirstChild("Room_" .. i)
+        if room then
+            local foundPortal = room:FindFirstChild("FirePortal")
+            if foundPortal then
+                portal = foundPortal
+                currentFloor = i
+                break
+            end
+        end
+    end
+    
+    if not portal then
+        return false
+    end
+    
+    local prompt = portal:FindFirstChildOfClass("ProximityPrompt")
+    if not prompt then
+        for _, obj in ipairs(portal:GetDescendants()) do
+            if obj:IsA("ProximityPrompt") then
+                prompt = obj
+                break
+            end
+        end
+    end
+    
+    if not prompt and portal.Parent then
+        prompt = portal.Parent:FindFirstChildOfClass("ProximityPrompt")
+    end
+    
+    if prompt then
+        for i = 1, 3 do
+            fireproximityprompt(prompt)
+            task.wait(0.05)
+        end
+        print("Portal ativado! Subindo do andar " .. currentFloor .. " para o andar " .. (currentFloor + 1))
+        return true
+    else
+        warn("ProximityPrompt não encontrado!")
+        return false
+    end
+end
 
 -- Função principal do auto castle
 local function autoCastle()
