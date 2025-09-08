@@ -2536,19 +2536,57 @@ Tabs.dungeon:AddToggle("TeleportMobs", {
         end
     end
 })
+-- Arquivo para salvar o estado do Auto INF
+local autoInfFile = "auto_inf_state.txt"
+
+-- Função para salvar estado
+local function saveAutoInfState(state)
+    if writefile then
+        writefile(autoInfFile, state and "true" or "false")
+    end
+end
+
+-- Função para carregar estado
+local function loadAutoInfState()
+    if isfile and readfile and isfile(autoInfFile) then
+        local data = readfile(autoInfFile)
+        return data == "true"
+    end
+    return false
+end
+
 Tabs.dungeon:AddToggle("TeleportMobs", {
     Title = "Auto INF",
-    Default = false,
+    Default = loadAutoInfState(), -- carrega o estado salvo
     Flag = "AutoFarmDungeon",
     Callback = function(state)
         teleportEnabled = state
+        saveAutoInfState(state) -- salva sempre que ativar/desativar
+
         if state then
             task.spawn(function()
                 local tweenService = game:GetService("TweenService")
                 local player = game.Players.LocalPlayer
                 local enemiesFolder = workspace.__Main.__Enemies.Server
                 local currentTween = nil
-                local lastUsedFloor = nil -- guarda o último andar em que o portal foi ativado
+                local lastUsedFloor = nil
+                local floorFile = "last_floor.txt"
+
+                -- carrega último andar salvo
+                if isfile and readfile and isfile(floorFile) then
+                    local data = tonumber(readfile(floorFile))
+                    if data then
+                        lastUsedFloor = data
+                        print("Último andar salvo carregado:", lastUsedFloor)
+                    end
+                end
+
+                local function saveFloor(floor)
+                    if writefile then
+                        writefile(floorFile, tostring(floor))
+                        print("Andar salvo:", floor)
+                    end
+                end
 
                 local function getDistance(pos1, pos2)
                     return (pos1 - pos2).Magnitude
@@ -2639,9 +2677,8 @@ Tabs.dungeon:AddToggle("TeleportMobs", {
                         return false
                     end
 
-                    -- só usa se for andar diferente do último
                     if lastUsedFloor == currentFloor then
-                        return false
+                        return false -- já usado nesse andar
                     end
 
                     hrp.CFrame = portal.CFrame
@@ -2680,7 +2717,8 @@ Tabs.dungeon:AddToggle("TeleportMobs", {
                             fireproximityprompt(prompt)
                             task.wait(0.05)
                         end
-                        lastUsedFloor = currentFloor -- salva andar usado
+                        lastUsedFloor = currentFloor
+                        saveFloor(currentFloor) -- salva o andar
                         print("Portal ativado! Subindo do andar " .. currentFloor .. " para o andar " .. (currentFloor + 1))
                         return true
                     else
@@ -2702,7 +2740,6 @@ Tabs.dungeon:AddToggle("TeleportMobs", {
                             end
                         end
                     else
-                        -- só vai pro portal se realmente não houver inimigo vivo
                         local enemiesAlive = false
                         for _, e in pairs(enemiesFolder:GetChildren()) do
                             if e:GetAttribute("HP") and e:GetAttribute("HP") > 0 then
