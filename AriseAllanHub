@@ -2807,159 +2807,166 @@ Tabs.dungeon:AddToggle("AutoCastle", {
 })
 
 -- ==========================
--- Auto Castle (Auto INF) com salvamento
+-- Auto INF (Castle Farm) com salvamento e auto-boot
 -- ==========================
 
--- Variáveis globais
+-- 1) Garantir chaves no ConfigSystem (usa "CastleToggle" que você já usa e persiste)
+if ConfigSystem.DefaultConfig.CastleToggle == nil then
+    ConfigSystem.DefaultConfig.CastleToggle = false
+end
+if ConfigSystem.CurrentConfig.CastleToggle == nil then
+    ConfigSystem.CurrentConfig.CastleToggle = ConfigSystem.DefaultConfig.CastleToggle
+end
+
+-- 2) Variáveis de controle
 local castleEnabled = false
 local lastUsedFloor = nil
 
--- Suporte no ConfigSystem
-if ConfigSystem.DefaultConfig.CastleINF == nil then
-    ConfigSystem.DefaultConfig.CastleINF = false
-end
-if ConfigSystem.CurrentConfig.CastleINF == nil then
-    ConfigSystem.CurrentConfig.CastleINF = ConfigSystem.DefaultConfig.CastleINF
+-- 3) Funções auxiliares
+local function startAutoCastle()
+    if castleEnabled then return end
+    castleEnabled = true
+
+    task.spawn(function()
+        local tweenService = game:GetService("TweenService")
+        local player = game.Players.LocalPlayer
+        local enemiesFolder = workspace.__Main.__Enemies.Server
+        local main = workspace.__Main
+        local world = main.__World
+
+        local function getClosestEnemy()
+            local closestEnemy, closestDistance = nil, math.huge
+            local playerCharacter = player.Character
+            if not playerCharacter or not playerCharacter:FindFirstChild("HumanoidRootPart") then 
+                return nil 
+            end
+            local playerPosition = playerCharacter.HumanoidRootPart.Position
+            for _, enemy in pairs(enemiesFolder:GetChildren()) do
+                local hp = enemy:GetAttribute("HP")
+                if hp and hp > 0 and enemy.Position then
+                    local d = (playerPosition - enemy.Position).Magnitude
+                    if d < closestDistance then
+                        closestDistance = d
+                        closestEnemy = enemy
+                    end
+                end
+            end
+            return closestEnemy
+        end
+
+        local function moveToEnemy(enemy)
+            local playerCharacter = player.Character
+            if not playerCharacter or not playerCharacter:FindFirstChild("HumanoidRootPart") or not enemy or not enemy.CFrame then
+                return false
+            end
+            playerCharacter.PrimaryPart = playerCharacter.HumanoidRootPart
+            playerCharacter.HumanoidRootPart.Anchored = false
+            local tweenInfo = TweenInfo.new(0.4, Enum.EasingStyle.Linear, Enum.EasingDirection.Out)
+            local tween = tweenService:Create(playerCharacter.PrimaryPart, tweenInfo, {CFrame = enemy.CFrame})
+            tween:Play()
+            tween.Completed:Wait()
+            return true
+        end
+
+        local function findFirePortal()
+            for i = 1, 200 do
+                local room = world:FindFirstChild("Room_" .. i)
+                if room then
+                    local foundPortal = room:FindFirstChild("FirePortal")
+                    if foundPortal then
+                        return foundPortal, i
+                    end
+                end
+            end
+            return nil, nil
+        end
+
+        local function teleportToPortal(portal)
+            local char = player.Character or player.CharacterAdded:Wait()
+            local hrp = char:WaitForChild("HumanoidRootPart")
+            hrp.CFrame = portal.CFrame
+            hrp.Velocity = Vector3.zero
+            task.wait(0.1)
+        end
+
+        local function activatePortal(portal, currentFloor)
+            if lastUsedFloor == currentFloor then
+                return false
+            end
+            local prompt = portal:FindFirstChildOfClass("ProximityPrompt")
+            if not prompt then
+                for _, obj in ipairs(portal:GetDescendants()) do
+                    if obj:IsA("ProximityPrompt") then
+                        prompt = obj
+                        break
+                    end
+                end
+            end
+            if not prompt and portal.Parent then
+                prompt = portal.Parent:FindFirstChildOfClass("ProximityPrompt")
+            end
+            if prompt then
+                for i = 1, 3 do
+                    fireproximityprompt(prompt)
+                    task.wait(0.05)
+                end
+                lastUsedFloor = currentFloor
+                print("🚀 Portal ativado! Subindo do andar " .. currentFloor .. " para o andar " .. (currentFloor + 1))
+                return true
+            else
+                warn("ProximityPrompt não encontrado!")
+                return false
+            end
+        end
+
+        -- loop principal
+        while castleEnabled do
+            local enemy = getClosestEnemy()
+            if enemy then
+                moveToEnemy(enemy)
+                while enemy.Parent and (enemy:GetAttribute("HP") or 1) > 0 and castleEnabled do
+                    task.wait(0.2)
+                end
+            else
+                local portal, floor = findFirePortal()
+                if portal and floor and lastUsedFloor ~= floor then
+                    print("📍 Andar atual: " .. floor)
+                    teleportToPortal(portal)
+                    activatePortal(portal, floor)
+                    task.wait(2)
+                end
+            end
+            task.wait(0.2)
+        end
+    end)
 end
 
--- Toggle na aba Dungeon
+local function stopAutoCastle()
+    castleEnabled = false
+end
+
+-- 4) Toggle (usa a mesma chave que persiste: CastleToggle)
 Tabs.dungeon:AddToggle("AutoCastle", {
     Title = "Auto INF (Castle Farm)",
-    Default = ConfigSystem.CurrentConfig.CastleINF or false,
+    Default = ConfigSystem.CurrentConfig.CastleToggle or false,
     Callback = function(state)
-        castleEnabled = state
-        ConfigSystem.CurrentConfig.CastleINF = state
+        ConfigSystem.CurrentConfig.CastleToggle = state
         ConfigSystem.SaveConfig()
 
         if state then
-            Fluent:Notify({
-                Title = "Auto Castle Ativado",
-                Content = "Vai matar mobs e subir de andar automaticamente",
-                Duration = 3
-            })
-            task.spawn(function()
-                local tweenService = game:GetService("TweenService")
-                local player = game.Players.LocalPlayer
-                local enemiesFolder = workspace.__Main.__Enemies.Server
-                local main = workspace.__Main
-                local world = main.__World
-                local lastUsedFloor = nil
-
-                -- funções auxiliares
-                local function getClosestEnemy()
-                    local closestEnemy, closestDistance = nil, math.huge
-                    local playerCharacter = player.Character
-                    if not playerCharacter or not playerCharacter:FindFirstChild("HumanoidRootPart") then 
-                        return nil 
-                    end
-                    local playerPosition = playerCharacter.HumanoidRootPart.Position
-                    for _, enemy in pairs(enemiesFolder:GetChildren()) do
-                        local hp = enemy:GetAttribute("HP")
-                        if hp and hp > 0 and enemy.Position then
-                            local distance = (playerPosition - enemy.Position).Magnitude
-                            if distance < closestDistance then
-                                closestDistance = distance
-                                closestEnemy = enemy
-                            end
-                        end
-                    end
-                    return closestEnemy
-                end
-
-                local function moveToEnemy(enemy)
-                    local playerCharacter = player.Character
-                    if not playerCharacter or not playerCharacter:FindFirstChild("HumanoidRootPart") or not enemy or not enemy.CFrame then
-                        return false
-                    end
-                    playerCharacter.PrimaryPart = playerCharacter.HumanoidRootPart
-                    playerCharacter.HumanoidRootPart.Anchored = false
-                    local tweenInfo = TweenInfo.new(0.4, Enum.EasingStyle.Linear, Enum.EasingDirection.Out)
-                    local tween = tweenService:Create(playerCharacter.PrimaryPart, tweenInfo, {CFrame = enemy.CFrame})
-                    tween:Play()
-                    tween.Completed:Wait()
-                    return true
-                end
-
-                local function findFirePortal()
-                    for i = 1, 200 do
-                        local room = world:FindFirstChild("Room_" .. i)
-                        if room then
-                            local foundPortal = room:FindFirstChild("FirePortal")
-                            if foundPortal then
-                                return foundPortal, i
-                            end
-                        end
-                    end
-                    return nil, nil
-                end
-
-                local function teleportToPortal(portal)
-                    local char = player.Character or player.CharacterAdded:Wait()
-                    local hrp = char:WaitForChild("HumanoidRootPart")
-                    hrp.CFrame = portal.CFrame
-                    hrp.Velocity = Vector3.zero
-                    task.wait(0.1)
-                end
-
-                local function activatePortal(portal, currentFloor)
-                    if lastUsedFloor == currentFloor then
-                        return false
-                    end
-                    local prompt = portal:FindFirstChildOfClass("ProximityPrompt")
-                    if not prompt then
-                        for _, obj in ipairs(portal:GetDescendants()) do
-                            if obj:IsA("ProximityPrompt") then
-                                prompt = obj
-                                break
-                            end
-                        end
-                    end
-                    if not prompt and portal.Parent then
-                        prompt = portal.Parent:FindFirstChildOfClass("ProximityPrompt")
-                    end
-                    if prompt then
-                        for i = 1, 3 do
-                            fireproximityprompt(prompt)
-                            task.wait(0.05)
-                        end
-                        lastUsedFloor = currentFloor
-                        print("🚀 Portal ativado! Subindo do andar " .. currentFloor .. " para o andar " .. (currentFloor + 1))
-                        return true
-                    else
-                        warn("ProximityPrompt não encontrado!")
-                        return false
-                    end
-                end
-
-                -- loop principal
-                while castleEnabled do
-                    local enemy = getClosestEnemy()
-                    if enemy then
-                        moveToEnemy(enemy)
-                        while enemy.Parent and (enemy:GetAttribute("HP") or 1) > 0 and castleEnabled do
-                            task.wait(0.2)
-                        end
-                    else
-                        local portal, floor = findFirePortal()
-                        if portal and floor and lastUsedFloor ~= floor then
-                            print("📍 Andar atual: " .. floor)
-                            teleportToPortal(portal)
-                            activatePortal(portal, floor)
-                            task.wait(2)
-                        end
-                    end
-                    task.wait(0.2)
-                end
-            end)
+            Fluent:Notify({ Title = "Auto Castle", Content = "Ativado", Duration = 3 })
+            startAutoCastle()
         else
-            Fluent:Notify({
-                Title = "Auto Castle Desativado",
-                Content = "Parou de subir andares automaticamente",
-                Duration = 3
-            })
+            Fluent:Notify({ Title = "Auto Castle", Content = "Desativado", Duration = 3 })
+            stopAutoCastle()
         end
     end
 })
+
+-- 5) Auto-boot (pra UIs que não disparam o Callback na carga)
+if ConfigSystem.CurrentConfig.CastleToggle then
+    startAutoCastle()
+end
 
 -- ============================
 -- Auto Castle (com detecção via Room)
