@@ -1,7 +1,8 @@
-if not game or not game.GetService then
+if not game or typeof(game.GetService) ~= "function" then
     warn("Ambiente do jogo não está disponível.")
     return
 end
+
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
