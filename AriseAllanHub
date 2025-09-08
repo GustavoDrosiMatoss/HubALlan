@@ -2969,7 +2969,7 @@ if ConfigSystem.CurrentConfig.CastleToggle then
 end
 
 -- ============================
--- Auto Castle (com detecção via Room)
+-- Auto Castle (com detecção via Room + Retry no Join)
 -- ============================
 
 castleEnabled = false
@@ -3012,6 +3012,34 @@ local function getCurrentCastleFloor()
     return current
 end
 
+-- Função para tentar entrar no Castle até conseguir
+local function joinCastleWithRetry(entryFloor)
+    while castleEnabled do
+        local ok = pcall(function()
+            remote:FireServer({
+                [1] = {
+                    [1] = {
+                        ["Check"] = true,
+                        ["Floor"] = tostring(entryFloor),
+                        ["Event"] = "CastleAction",
+                        ["Action"] = "Join"
+                    },
+                    [2] = "\12"
+                }
+            })
+        end)
+
+        if ok then
+            print("✅ Tentativa de entrar no Castle enviada.")
+            return true
+        else
+            print("⏳ Castle ainda não disponível, tentando novamente em 5s...")
+            task.wait(5)
+        end
+    end
+    return false
+end
+
 -- Loop do Auto Castle
 function autoCastle()
     task.spawn(function()
@@ -3036,19 +3064,8 @@ function autoCastle()
 
                 task.wait(3)
 
-                -- Entrar novamente no andar inicial
-                local joinArgs = {
-                    [1] = {
-                        [1] = {
-                            ["Check"] = true,
-                            ["Floor"] = tostring(ConfigSystem.CurrentConfig.EntryFloor or 1),
-                            ["Event"] = "CastleAction",
-                            ["Action"] = "Join"
-                        },
-                        [2] = "\12"
-                    }
-                }
-                pcall(function() remote:FireServer(unpack(joinArgs)) end)
+                -- Entrar novamente no andar inicial (com retry)
+                joinCastleWithRetry(ConfigSystem.CurrentConfig.EntryFloor or 1)
                 task.wait(2)
             end
 
@@ -3088,19 +3105,8 @@ Tabs.dungeon:AddToggle("CastleToggle", {
 
         if state then
             task.spawn(function()
-                -- Join Castle Infernal
-                local joinArgs = {
-                    [1] = {
-                        [1] = {
-                            ["Check"] = true,
-                            ["Floor"] = tostring(ConfigSystem.CurrentConfig.EntryFloor or 1),
-                            ["Event"] = "CastleAction",
-                            ["Action"] = "Join"
-                        },
-                        [2] = "\12"
-                    }
-                }
-                pcall(function() remote:FireServer(unpack(joinArgs)) end)
+                -- Join Castle Infernal (com retry)
+                joinCastleWithRetry(ConfigSystem.CurrentConfig.EntryFloor or 1)
                 task.wait(1)
 
                 castleSessionActive = true
