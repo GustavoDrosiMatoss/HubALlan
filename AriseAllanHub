@@ -2536,7 +2536,6 @@ Tabs.dungeon:AddToggle("TeleportMobs", {
         end
     end
 })
-
 Tabs.dungeon:AddToggle("TeleportMobs", {
     Title = "Auto INF",
     Default = false,
@@ -2549,9 +2548,6 @@ Tabs.dungeon:AddToggle("TeleportMobs", {
                 local player = game.Players.LocalPlayer
                 local enemiesFolder = workspace.__Main.__Enemies.Server
                 local currentTween = nil
-                local noEnemiesTimer = 0 
-                local maxTimeWithoutEnemies = 3 
-                local lastEnemyCheck = tick()
 
                 local function getDistance(pos1, pos2)
                     return (pos1 - pos2).Magnitude
@@ -2589,7 +2585,6 @@ Tabs.dungeon:AddToggle("TeleportMobs", {
                         return false
                     end
 
-                    -- Cancelar tween anterior se existir
                     if currentTween then
                         currentTween:Cancel()
                     end
@@ -2599,31 +2594,27 @@ Tabs.dungeon:AddToggle("TeleportMobs", {
 
                     local tweenInfo = TweenInfo.new(0.5, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
                     currentTween = tweenService:Create(playerCharacter.PrimaryPart, tweenInfo, {CFrame = root.CFrame})
-                    
                     currentTween:Play()
-                    
-                    -- Usar spawn para não bloquear o loop principal
+
                     task.spawn(function()
                         currentTween.Completed:Wait()
                         currentTween = nil
                     end)
-                    
+
                     return true
                 end
-                
-                -- Função para teleportar para FirePortal
+
                 local function teleportToFirePortal()
                     local char = player.Character
                     if not char or not char:FindFirstChild("HumanoidRootPart") then
                         return false
                     end
-                    
+
                     local hrp = char.HumanoidRootPart
                     local main = workspace.__Main
                     local world = main.__World
-                    local portal = nil
-                    local currentFloor = nil
-                    
+                    local portal, currentFloor = nil, nil
+
                     for i = 1, 200 do
                         local room = world:FindFirstChild("Room_" .. i)
                         if room then
@@ -2635,26 +2626,24 @@ Tabs.dungeon:AddToggle("TeleportMobs", {
                             end
                         end
                     end
-                    
+
                     if not portal then
                         warn("FirePortal não encontrado!")
                         return false
                     end
-                    
+
                     hrp.CFrame = portal.CFrame
                     hrp.Velocity = Vector3.zero
-                    
+
                     print("Teleportado para o portal do andar " .. currentFloor)
                     return true, currentFloor
                 end
 
-                -- Função para ativar o FirePortal
                 local function activateFirePortal()
                     local main = workspace.__Main
                     local world = main.__World
-                    local portal = nil
-                    local currentFloor = nil
-                    
+                    local portal, currentFloor = nil, nil
+
                     for i = 1, 200 do
                         local room = world:FindFirstChild("Room_" .. i)
                         if room then
@@ -2666,11 +2655,11 @@ Tabs.dungeon:AddToggle("TeleportMobs", {
                             end
                         end
                     end
-                    
+
                     if not portal then
                         return false
                     end
-                    
+
                     local prompt = portal:FindFirstChildOfClass("ProximityPrompt")
                     if not prompt then
                         for _, obj in ipairs(portal:GetDescendants()) do
@@ -2680,11 +2669,11 @@ Tabs.dungeon:AddToggle("TeleportMobs", {
                             end
                         end
                     end
-                    
+
                     if not prompt and portal.Parent then
                         prompt = portal.Parent:FindFirstChildOfClass("ProximityPrompt")
                     end
-                    
+
                     if prompt then
                         for i = 1, 3 do
                             fireproximityprompt(prompt)
@@ -2701,15 +2690,35 @@ Tabs.dungeon:AddToggle("TeleportMobs", {
                 -- loop principal
                 while teleportEnabled do
                     local enemy = getClosestEnemy()
+
                     if enemy then
-                        moveToEnemy(enemy)
+                        local moved = moveToEnemy(enemy)
+                        if moved then
+                            task.wait(0.5)
+                            while enemy.Parent and (enemy:GetAttribute("HP") or 1) > 0 and teleportEnabled do
+                                task.wait(0.2)
+                            end
+                        end
                     else
-                        local success, floor = teleportToFirePortal()
-                        if success then
-                            activateFirePortal()
+                        -- só vai pro portal se realmente não houver nenhum inimigo vivo
+                        local enemiesAlive = false
+                        for _, e in pairs(enemiesFolder:GetChildren()) do
+                            if e:GetAttribute("HP") and e:GetAttribute("HP") > 0 then
+                                enemiesAlive = true
+                                break
+                            end
+                        end
+
+                        if not enemiesAlive then
+                            local success, floor = teleportToFirePortal()
+                            if success then
+                                activateFirePortal()
+                                task.wait(2) -- tempo para carregar o próximo andar
+                            end
                         end
                     end
-                    task.wait(0.5)
+
+                    task.wait(0.2)
                 end
             end)
         end
