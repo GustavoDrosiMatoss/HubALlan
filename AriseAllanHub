@@ -2726,9 +2726,7 @@ local function getCurrentFloor()
     end
     return nil
 end
-
-
-                local function findFirePortal()
+  local function findFirePortal()
                     local main = workspace.__Main
                     local world = main.__World
                     local portal, currentFloor = nil, nil
@@ -2809,8 +2807,8 @@ end
                     else
                         warn("ProximityPrompt não encontrado!")
                         return false
-                    end
-                    
+   end
+
 -- Função principal do auto castle
 local function autoCastle()
     while castleEnabled do
