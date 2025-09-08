@@ -2536,6 +2536,7 @@ Tabs.dungeon:AddToggle("TeleportMobs", {
         end
     end
 })
+
 Tabs.dungeon:AddToggle("TeleportMobs", {
     Title = "Auto INF",
     Default = false,
@@ -2548,6 +2549,9 @@ Tabs.dungeon:AddToggle("TeleportMobs", {
                 local player = game.Players.LocalPlayer
                 local enemiesFolder = workspace.__Main.__Enemies.Server
                 local currentTween = nil
+                local noEnemiesTimer = 0 
+                local maxTimeWithoutEnemies = 3 
+                local lastEnemyCheck = tick()
 
                 local function getDistance(pos1, pos2)
                     return (pos1 - pos2).Magnitude
@@ -2585,7 +2589,7 @@ Tabs.dungeon:AddToggle("TeleportMobs", {
                         return false
                     end
 
-                    -- Cancela tween anterior se existir
+                    -- Cancelar tween anterior se existir
                     if currentTween then
                         currentTween:Cancel()
                     end
@@ -2598,6 +2602,7 @@ Tabs.dungeon:AddToggle("TeleportMobs", {
                     
                     currentTween:Play()
                     
+                    -- Usar spawn para não bloquear o loop principal
                     task.spawn(function()
                         currentTween.Completed:Wait()
                         currentTween = nil
@@ -2605,7 +2610,7 @@ Tabs.dungeon:AddToggle("TeleportMobs", {
                     
                     return true
                 end
-
+                
                 -- Função para teleportar para FirePortal
                 local function teleportToFirePortal()
                     local char = player.Character
@@ -2616,7 +2621,8 @@ Tabs.dungeon:AddToggle("TeleportMobs", {
                     local hrp = char.HumanoidRootPart
                     local main = workspace.__Main
                     local world = main.__World
-                    local portal, currentFloor = nil, nil
+                    local portal = nil
+                    local currentFloor = nil
                     
                     for i = 1, 200 do
                         local room = world:FindFirstChild("Room_" .. i)
@@ -2646,7 +2652,8 @@ Tabs.dungeon:AddToggle("TeleportMobs", {
                 local function activateFirePortal()
                     local main = workspace.__Main
                     local world = main.__World
-                    local portal, currentFloor = nil, nil
+                    local portal = nil
+                    local currentFloor = nil
                     
                     for i = 1, 200 do
                         local room = world:FindFirstChild("Room_" .. i)
@@ -2697,7 +2704,6 @@ Tabs.dungeon:AddToggle("TeleportMobs", {
                     if enemy then
                         moveToEnemy(enemy)
                     else
-                        -- se não tiver inimigo, tenta portal
                         local success, floor = teleportToFirePortal()
                         if success then
                             activateFirePortal()
