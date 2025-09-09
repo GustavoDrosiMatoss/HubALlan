@@ -3259,7 +3259,7 @@ if ConfigSystem.CurrentConfig.CastleToggle then
 end
 
 -- ============================
--- Auto Castle (com detecção via Room)
+-- Auto Castle (com prints no console)
 -- ============================
 
 castleEnabled = false
@@ -3282,6 +3282,7 @@ Tabs.dungeon:AddInput("CastleExitFloor", {
             exitFloor = floor
             ConfigSystem.CurrentConfig.CastleExitFloor = floor
             ConfigSystem.SaveConfig()
+            warn("[Castle] Andar de saída atualizado para:", floor)
         end
     end
 })
@@ -3299,11 +3300,17 @@ local function getCurrentCastleFloor()
             current = i
         end
     end
+    if current then
+        warn("[Castle] Andar atual detectado:", current)
+    else
+        warn("[Castle] Não está em nenhuma Room (fora do castelo).")
+    end
     return current
 end
 
 -- Função para entrar no Castle
 local function joinCastle()
+    warn("[Castle] Tentando entrar no castelo...")
     local joinArgs = {
         [1] = {
             [1] = {
@@ -3322,16 +3329,16 @@ end
 function autoCastle()
     task.spawn(function()
         while castleEnabled do
-            -- Detectar andar atual
             local currentFloor = getCurrentCastleFloor()
 
             -- Se não está em nenhuma Room (provavelmente fora do castelo)
             if not currentFloor then
                 joinCastle()
-                task.wait(5) -- espera alguns segundos antes de tentar de novo
+                task.wait(5)
             else
                 -- Se já atingiu o andar de saída, sai e entra de novo
                 if currentFloor >= exitFloor then
+                    warn("[Castle] Atingiu o andar de saída:", currentFloor, "→ Saindo...")
                     local leaveArgs = {
                         [1] = {
                             [1] = { ["Event"] = "LeaveDungeon" },
@@ -3366,6 +3373,7 @@ function autoCastle()
                             pcall(function()
                                 remote:FireServer("Attack", mob)
                             end)
+                            warn("[Castle] Atacando mob:", mob.Name)
                             task.wait(0.25)
                         end
                     end
@@ -3388,6 +3396,7 @@ Tabs.dungeon:AddToggle("CastleToggle", {
 
         if state then
             task.spawn(function()
+                warn("[Castle] Botão ativado → Tentando entrar no castelo inicial...")
                 joinCastle()
                 task.wait(1)
 
@@ -3404,6 +3413,7 @@ Tabs.dungeon:AddToggle("CastleToggle", {
             end)
         else
             if castleSessionActive then
+                warn("[Castle] Botão desativado → Saindo do castelo...")
                 local leaveArgs = {
                     [1] = {
                         [1] = { ["Event"] = "LeaveDungeon" },
