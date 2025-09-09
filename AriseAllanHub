@@ -3328,6 +3328,7 @@ end
 -- Loop do Auto Castle
 function autoCastle()
     task.spawn(function()
+        warn("[Castle] Loop iniciado!")
         while castleEnabled do
             local currentFloor = getCurrentCastleFloor()
 
@@ -3336,16 +3337,24 @@ function autoCastle()
                 joinCastle()
                 task.wait(5)
             else
-                -- Se já atingiu o andar de saída, sai e entra de novo
-                if currentFloor >= exitFloor then
-                    warn("[Castle] Atingiu o andar de saída:", currentFloor, "→ Saindo...")
+                -- Se atingiu exatamente o andar de saída
+                if currentFloor == exitFloor then
+                    warn("[Castle] Andar de saída alcançado:", currentFloor, "→ Tentando sair...")
                     local leaveArgs = {
                         [1] = {
                             [1] = { ["Event"] = "LeaveDungeon" },
                             [2] = "\12"
                         }
                     }
-                    pcall(function() remote:FireServer(unpack(leaveArgs)) end)
+                    local ok, err = pcall(function()
+                        remote:FireServer(unpack(leaveArgs))
+                    end)
+
+                    if ok then
+                        warn("[Castle] LeaveDungeon enviado com sucesso!")
+                    else
+                        warn("[Castle] Erro ao enviar LeaveDungeon:", err)
+                    end
 
                     Fluent:Notify({
                         Title = "Castle",
@@ -3382,6 +3391,7 @@ function autoCastle()
 
             task.wait(0.5)
         end
+        warn("[Castle] Loop encerrado.")
     end)
 end
 
