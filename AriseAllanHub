@@ -3259,7 +3259,7 @@ if ConfigSystem.CurrentConfig.CastleToggle then
 end
 
 -- ============================
--- Auto Castle (com prints no console)
+-- Auto Castle (versão corrigida)
 -- ============================
 
 castleEnabled = false
@@ -3287,7 +3287,7 @@ Tabs.dungeon:AddInput("CastleExitFloor", {
     end
 })
 
--- Detectar andar atual pelo Room
+-- Detectar andar atual pelo Room (pegando só o maior válido)
 local function getCurrentCastleFloor()
     local main = workspace:FindFirstChild("__Main")
     if not main then return nil end
@@ -3300,6 +3300,7 @@ local function getCurrentCastleFloor()
             current = i
         end
     end
+
     if current then
         warn("[Castle] Andar atual detectado:", current)
     else
@@ -3308,7 +3309,7 @@ local function getCurrentCastleFloor()
     return current
 end
 
--- Função para entrar no Castle
+-- Entrar no Castle
 local function joinCastle()
     warn("[Castle] Tentando entrar no castelo...")
     local joinArgs = {
@@ -3322,7 +3323,29 @@ local function joinCastle()
             [2] = "\12"
         }
     }
-    pcall(function() remote:FireServer(unpack(joinArgs)) end)
+    local ok, err = pcall(function() remote:FireServer(unpack(joinArgs)) end)
+    if ok then
+        warn("[Castle] Pedido de entrada enviado com sucesso.")
+    else
+        warn("[Castle] Erro ao entrar:", err)
+    end
+end
+
+-- Sair do Castle
+local function leaveCastle()
+    warn("[Castle] Tentando sair do castelo...")
+    local leaveArgs = {
+        [1] = {
+            [1] = { ["Event"] = "LeaveDungeon" },
+            [2] = "\12"
+        }
+    }
+    local ok, err = pcall(function() remote:FireServer(unpack(leaveArgs)) end)
+    if ok then
+        warn("[Castle] Pedido de saída enviado com sucesso.")
+    else
+        warn("[Castle] Erro ao sair:", err)
+    end
 end
 
 -- Loop do Auto Castle
@@ -3332,29 +3355,15 @@ function autoCastle()
         while castleEnabled do
             local currentFloor = getCurrentCastleFloor()
 
-            -- Se não está em nenhuma Room (provavelmente fora do castelo)
             if not currentFloor then
+                -- Não está no castelo, tenta entrar
                 joinCastle()
                 task.wait(5)
             else
-                -- Se atingiu exatamente o andar de saída
-                if currentFloor == exitFloor then
-                    warn("[Castle] Andar de saída alcançado:", currentFloor, "→ Tentando sair...")
-                    local leaveArgs = {
-                        [1] = {
-                            [1] = { ["Event"] = "LeaveDungeon" },
-                            [2] = "\12"
-                        }
-                    }
-                    local ok, err = pcall(function()
-                        remote:FireServer(unpack(leaveArgs))
-                    end)
-
-                    if ok then
-                        warn("[Castle] LeaveDungeon enviado com sucesso!")
-                    else
-                        warn("[Castle] Erro ao enviar LeaveDungeon:", err)
-                    end
+                -- Se já alcançou ou passou o andar de saída
+                if currentFloor >= exitFloor then
+                    warn("[Castle] Alcançou o andar de saída (" .. currentFloor .. ") → Saindo...")
+                    leaveCastle()
 
                     Fluent:Notify({
                         Title = "Castle",
@@ -3362,12 +3371,12 @@ function autoCastle()
                         Duration = 3
                     })
 
-                    task.wait(3)
+                    task.wait(5) -- espera sair do castelo
                     joinCastle()
-                    task.wait(2)
+                    task.wait(3) -- espera estabilizar entrada
                 end
 
-                -- Farm normal de mobs
+                -- Farm de mobs
                 local mobsFolder = workspace:FindFirstChild("Enemies") or workspace:FindFirstChild("Mobs")
                 if mobsFolder then
                     for _, mob in pairs(mobsFolder:GetChildren()) do
@@ -3406,9 +3415,9 @@ Tabs.dungeon:AddToggle("CastleToggle", {
 
         if state then
             task.spawn(function()
-                warn("[Castle] Botão ativado → Tentando entrar no castelo inicial...")
+                warn("[Castle] Botão ativado → Entrando no castelo inicial...")
                 joinCastle()
-                task.wait(1)
+                task.wait(2)
 
                 castleSessionActive = true
                 autoCastle()
@@ -3423,14 +3432,7 @@ Tabs.dungeon:AddToggle("CastleToggle", {
             end)
         else
             if castleSessionActive then
-                warn("[Castle] Botão desativado → Saindo do castelo...")
-                local leaveArgs = {
-                    [1] = {
-                        [1] = { ["Event"] = "LeaveDungeon" },
-                        [2] = "\12"
-                    }
-                }
-                pcall(function() remote:FireServer(unpack(leaveArgs)) end)
+                leaveCastle()
                 castleSessionActive = false
             end
 
