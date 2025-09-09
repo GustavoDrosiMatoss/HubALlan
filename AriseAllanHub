@@ -3258,11 +3258,12 @@ if ConfigSystem.CurrentConfig.CastleToggle then
     startAutoCastle()
 end
 
--- Auto Castle (com failsafe de saída)
+-- Auto Castle (com failsafe de saída e entrada configurável)
 
 castleEnabled = false
 local castleSessionActive = false
 
+-- =======================
 -- Configuração do andar de saída (padrão 101)
 ConfigSystem.DefaultConfig.CastleExitFloor = ConfigSystem.DefaultConfig.CastleExitFloor or 101
 ConfigSystem.CurrentConfig.CastleExitFloor = ConfigSystem.CurrentConfig.CastleExitFloor or ConfigSystem.DefaultConfig.CastleExitFloor
@@ -3281,6 +3282,29 @@ Tabs.dungeon:AddInput("CastleExitFloor", {
             ConfigSystem.CurrentConfig.CastleExitFloor = floor
             ConfigSystem.SaveConfig()
             warn("[Castle] Andar de saída atualizado para:", floor)
+        end
+    end
+})
+
+-- =======================
+-- Configuração do andar de entrada (padrão 1)
+ConfigSystem.DefaultConfig.CastleEntryFloor = ConfigSystem.DefaultConfig.CastleEntryFloor or 1
+ConfigSystem.CurrentConfig.CastleEntryFloor = ConfigSystem.CurrentConfig.CastleEntryFloor or ConfigSystem.DefaultConfig.CastleEntryFloor
+local entryFloor = ConfigSystem.CurrentConfig.CastleEntryFloor
+
+Tabs.dungeon:AddInput("CastleEntryFloor", {
+    Title = "Castle Entry Floor",
+    Default = tostring(entryFloor),
+    Placeholder = "Andar de entrada",
+    Numeric = true,
+    Finished = true,
+    Callback = function(value)
+        local floor = tonumber(value)
+        if floor and floor > 0 then
+            entryFloor = floor
+            ConfigSystem.CurrentConfig.CastleEntryFloor = floor
+            ConfigSystem.SaveConfig()
+            warn("[Castle] Andar de entrada atualizado para:", floor)
         end
     end
 })
@@ -3309,12 +3333,12 @@ end
 
 -- Entrar no castelo
 local function joinCastle()
-    warn("[Castle] Tentando entrar...")
+    warn("[Castle] Tentando entrar no andar " .. tostring(entryFloor) .. "...")
     local joinArgs = {
         [1] = {
             [1] = {
                 ["Check"] = true,
-                ["Floor"] = tostring(ConfigSystem.CurrentConfig.EntryFloor or 1),
+                ["Floor"] = tostring(entryFloor),
                 ["Event"] = "CastleAction",
                 ["Action"] = "Join"
             },
@@ -3441,7 +3465,7 @@ Tabs.dungeon:AddToggle("CastleToggle", {
                 pcall(function()
                     Fluent:Notify({
                         Title = "Castle Ativado",
-                        Content = "Castle iniciado no andar " .. tostring(ConfigSystem.CurrentConfig.EntryFloor or 1) .. " (sairá no " .. tostring(exitFloor) .. ")",
+                        Content = "Castle iniciado no andar " .. tostring(entryFloor) .. " (sairá no " .. tostring(exitFloor) .. ")",
                         Duration = 3
                     })
                 end)
