@@ -3257,7 +3257,8 @@ Tabs.dungeon:AddToggle("AutoCastle", {
 if ConfigSystem.CurrentConfig.CastleToggle then
     startAutoCastle()
 end
--- Auto Castle (versão corrigida e limpa)
+
+-- Auto Castle (com failsafe de saída)
 
 castleEnabled = false
 local castleSessionActive = false
@@ -3345,6 +3346,22 @@ local function leaveCastle()
     end
 end
 
+-- Failsafe: tenta sair repetidamente até estar fora
+local function forceLeaveUntilOut()
+    task.spawn(function()
+        while castleEnabled do
+            local floor = getCurrentCastleFloor()
+            if not floor then
+                warn("[Castle] Confirmado fora do castelo (failsafe concluído).")
+                break
+            end
+            warn("[Castle] Ainda dentro do castelo → Tentando sair novamente (failsafe).")
+            leaveCastle()
+            task.wait(10)
+        end
+    end)
+end
+
 -- Loop principal
 function autoCastle()
     task.spawn(function()
@@ -3353,6 +3370,7 @@ function autoCastle()
             local currentFloor = getCurrentCastleFloor()
 
             if not currentFloor then
+                -- Não está no castelo, tenta entrar
                 joinCastle()
                 task.wait(5)
             else
@@ -3365,6 +3383,9 @@ function autoCastle()
                         Content = "Saiu no andar " .. tostring(exitFloor) .. ", reiniciando...",
                         Duration = 3
                     })
+
+                    -- Inicia failsafe até sair realmente
+                    forceLeaveUntilOut()
 
                     task.wait(5)
                     joinCastle()
