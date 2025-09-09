@@ -3012,7 +3012,7 @@ Tabs.dungeon:AddToggle("AutoCastle", {
 })
 
 -- ==========================
--- Auto INF (Castle Farm) com salvamento, auto-boot e ativação contínua de portal
+-- Auto INF (Castle Farm) com salvamento, auto-boot, 3 tentativas e cooldown por andar
 -- ==========================
 
 -- 1) Garantir chaves no ConfigSystem (usa "CastleToggle" que você já usa e persiste)
@@ -3025,11 +3025,8 @@ end
 
 -- 2) Variáveis de controle
 local castleEnabled = false
-local portalWorkerRunning = false
-
--- Mantemos para debug e heurística de avanço
-local lastSeenFloor = nil
-local lastPortalInstance = nil
+local lastUsedFloor = nil
+local floorCooldown = {} -- salva tick() do último fail por andar
 
 -- 3) Funções auxiliares
 local function startAutoCastle()
@@ -3039,70 +3036,45 @@ local function startAutoCastle()
     task.spawn(function()
         local tweenService = game:GetService("TweenService")
         local player = game.Players.LocalPlayer
-        local main = workspace:FindFirstChild("__Main")
-        if not main then
-            warn("Main não encontrado")
-            return
-        end
-
-        local enemiesFolder = main:FindFirstChild("__Enemies") and main.__Enemies:FindFirstChild("Server")
-        local world = main:FindFirstChild("__World")
-        if not enemiesFolder or not world then
-            warn("Pastas de Enemies/World não encontradas")
-            return
-        end
-
-        local function getHRP()
-            local char = player.Character or player.CharacterAdded:Wait()
-            return char:FindFirstChild("HumanoidRootPart"), char
-        end
+        local enemiesFolder = workspace.__Main.__Enemies.Server
+        local main = workspace.__Main
+        local world = main.__World
 
         local function getClosestEnemy()
-            local hrp = getHRP()
-            if not hrp then return nil end
-            local pos = hrp.Position
-            local closest, dmin = nil, math.huge
-            for _, enemy in ipairs(enemiesFolder:GetChildren()) do
+            local closestEnemy, closestDistance = nil, math.huge
+            local playerCharacter = player.Character
+            if not playerCharacter or not playerCharacter:FindFirstChild("HumanoidRootPart") then 
+                return nil 
+            end
+            local playerPosition = playerCharacter.HumanoidRootPart.Position
+            for _, enemy in pairs(enemiesFolder:GetChildren()) do
                 local hp = enemy:GetAttribute("HP")
-                if hp and hp > 0 then
-                    local p = (enemy.Position or (enemy:FindFirstChild("HumanoidRootPart") and enemy.HumanoidRootPart.Position))
-                    if p then
-                        local d = (pos - p).Magnitude
-                        if d < dmin then
-                            dmin = d
-                            closest = enemy
-                        end
+                if hp and hp > 0 and enemy.Position then
+                    local d = (playerPosition - enemy.Position).Magnitude
+                    if d < closestDistance then
+                        closestDistance = d
+                        closestEnemy = enemy
                     end
                 end
             end
-            return closest
-        end
-
-        local function moveToCFrame(targetCFrame)
-            local hrp = getHRP()
-            if not hrp or not targetCFrame then return false end
-            local char = hrp.Parent
-            if char and char:FindFirstChild("HumanoidRootPart") then
-                char.PrimaryPart = hrp
-                hrp.Anchored = false
-                local ti = TweenInfo.new(0.35, Enum.EasingStyle.Linear, Enum.EasingDirection.Out)
-                local tween = tweenService:Create(hrp, ti, {CFrame = targetCFrame})
-                tween:Play()
-                tween.Completed:Wait()
-                return true
-            end
-            return false
+            return closestEnemy
         end
 
         local function moveToEnemy(enemy)
-            if not enemy then return false end
-            local cf = enemy.CFrame or (enemy:FindFirstChild("HumanoidRootPart") and enemy.HumanoidRootPart.CFrame)
-            if not cf then return false end
-            return moveToCFrame(cf)
+            local playerCharacter = player.Character
+            if not playerCharacter or not playerCharacter:FindFirstChild("HumanoidRootPart") or not enemy or not enemy.CFrame then
+                return false
+            end
+            playerCharacter.PrimaryPart = playerCharacter.HumanoidRootPart
+            playerCharacter.HumanoidRootPart.Anchored = false
+            local tweenInfo = TweenInfo.new(0.4, Enum.EasingStyle.Linear, Enum.EasingDirection.Out)
+            local tween = tweenService:Create(playerCharacter.PrimaryPart, tweenInfo, {CFrame = enemy.CFrame})
+            tween:Play()
+            tween.Completed:Wait()
+            return true
         end
 
         local function findFirePortal()
-            -- Retorna o primeiro portal encontrado e o índice do "andar"
             for i = 1, 200 do
                 local room = world:FindFirstChild("Room_" .. i)
                 if room then
@@ -3115,118 +3087,97 @@ local function startAutoCastle()
             return nil, nil
         end
 
-        local function teleportNearPortal(portal)
-            local hrp = getHRP()
-            if not hrp or not portal or not portal.CFrame then return end
-            -- Posição 2 studs à frente do portal (elevado um pouco)
+        local function teleportToPortal(portal)
+            local char = player.Character or player.CharacterAdded:Wait()
+            local hrp = char:WaitForChild("HumanoidRootPart")
+            -- levemente à frente/alto pra evitar clip
             local target = portal.CFrame * CFrame.new(0, 2, -2)
             hrp.CFrame = target
             hrp.Velocity = Vector3.zero
+            task.wait(0.1)
         end
 
-        local function getPortalPrompt(portal)
-            if not portal then return nil end
-            local prompt = portal:FindFirstChildOfClass("ProximityPrompt")
-            if prompt then return prompt end
-            for _, obj in ipairs(portal:GetDescendants()) do
-                if obj:IsA("ProximityPrompt") then
-                    prompt = obj
-                    break
+        -- Tenta ativar o portal até 3 vezes; se falhar, cooldown de 10s
+        local function activatePortal(portal, currentFloor)
+            if lastUsedFloor == currentFloor then
+                return false
+            end
+
+            -- checa cooldown
+            local now = tick()
+            if floorCooldown[currentFloor] and now - floorCooldown[currentFloor] < 10 then
+                return false
+            end
+
+            local function getPrompt(p)
+                if not p then return nil end
+                local prompt = p:FindFirstChildOfClass("ProximityPrompt")
+                if prompt then return prompt end
+                for _, obj in ipairs(p:GetDescendants()) do
+                    if obj:IsA("ProximityPrompt") then
+                        return obj
+                    end
                 end
+                if p.Parent then
+                    return p.Parent:FindFirstChildOfClass("ProximityPrompt")
+                end
+                return nil
             end
-            if not prompt and portal.Parent then
-                prompt = portal.Parent:FindFirstChildOfClass("ProximityPrompt")
-            end
-            return prompt
-        end
 
-        -- ===== Ativador PERMANENTE do portal (tenta a cada 1s) =====
-        local function runPortalActivator()
-            if portalWorkerRunning then return end
-            portalWorkerRunning = true
-
-            task.spawn(function()
-                while castleEnabled do
-                    local portal, floor = findFirePortal()
-                    if portal and floor then
-                        -- Guarda para heurística
-                        lastSeenFloor = floor
-                        if lastPortalInstance ~= portal then
-                            lastPortalInstance = portal
-                        end
-
-                        -- Tenta manter o player perto do portal
-                        local hrp = getHRP()
-                        if hrp and (hrp.Position - portal.Position).Magnitude > 6 then
-                            teleportNearPortal(portal)
-                        end
-
-                        -- Tenta ativar (com suporte a HoldDuration)
-                        local prompt = getPortalPrompt(portal)
-                        if prompt then
-                            -- Dispara múltiplas vezes para contornar lag/replicação
-                            for _ = 1, 3 do
-                                pcall(function()
-                                    if prompt.HoldDuration and prompt.HoldDuration > 0 then
-                                        -- Muitos executores aceitam 1 como "segurar"; usamos 1 e repetimos
-                                        fireproximityprompt(prompt, 1)
-                                    else
-                                        fireproximityprompt(prompt)
-                                    end
-                                end)
-                                task.wait(0.15)
+            local success = false
+            for attempt = 1, 3 do
+                if not castleEnabled then break end
+                local prompt = getPrompt(portal)
+                if prompt then
+                    -- dispara algumas vezes no mesmo attempt pra garantir
+                    for _ = 1, 3 do
+                        pcall(function()
+                            if prompt.HoldDuration and prompt.HoldDuration > 0 then
+                                fireproximityprompt(prompt, 1)
+                            else
+                                fireproximityprompt(prompt)
                             end
-                            print(("🚀 Tentando ativar portal do andar %d..."):format(floor))
-                        else
-                            warn("⚠️ ProximityPrompt do portal não encontrado (ainda).")
-                        end
+                        end)
+                        task.wait(0.1)
                     end
-
-                    -- Heurística simples: se o floor detectado aumentar, consideramos que subiu
-                    do
-                        local _, now = findFirePortal()
-                        if lastSeenFloor and now and now > lastSeenFloor then
-                            print(("✅ Portal ativado! Subiu do andar %d para %d."):format(lastSeenFloor, now))
-                            lastSeenFloor = now
-                        end
-                    end
-
-                    task.wait(1) -- roda para sempre de 1 em 1s
+                    print(("🚀 [Tentativa %d/3] Ativando portal do andar %d"):format(attempt, currentFloor))
+                    lastUsedFloor = currentFloor
+                    success = true
+                    break
+                else
+                    warn(("⚠️ Prompt não encontrado (tentativa %d/3)."):format(attempt))
                 end
-                portalWorkerRunning = false
-            end)
+                task.wait(0.75)
+            end
+
+            if success then
+                print("✅ Portal ativado! Indo para o andar " .. (currentFloor + 1))
+            else
+                floorCooldown[currentFloor] = tick() -- cooldown de 10s
+                warn("⏹️ Não foi possível ativar após 3 tentativas. Cooldown iniciado para este andar.")
+            end
+
+            return success
         end
 
-        -- Inicia o ativador permanente
-        runPortalActivator()
-
-        -- ===== Loop principal de combate/movimento =====
+        -- loop principal
         while castleEnabled do
             local enemy = getClosestEnemy()
-
             if enemy then
                 moveToEnemy(enemy)
-                -- Espera o inimigo morrer / sumir
-                local tries = 0
-                while castleEnabled and enemy.Parent and (enemy:GetAttribute("HP") or 1) > 0 do
+                while enemy.Parent and (enemy:GetAttribute("HP") or 1) > 0 and castleEnabled do
                     task.wait(0.2)
-                    tries += 1
-                    if tries % 20 == 0 then
-                        -- reaproxima a cada ~4s
-                        moveToEnemy(enemy)
-                    end
                 end
             else
-                -- Se não tem inimigo visível, aproxima do portal (se existir); ativação fica por conta do worker
                 local portal, floor = findFirePortal()
-                if portal and floor then
-                    print("📍 Andar atual (detecção): " .. floor)
-                    teleportNearPortal(portal)
+                if portal and floor and lastUsedFloor ~= floor then
+                    print("📍 Andar atual: " .. floor)
+                    teleportToPortal(portal)
+                    activatePortal(portal, floor) -- tenta 3x e respeita cooldown
+                    task.wait(2)
                 end
-                task.wait(0.3)
             end
-
-            task.wait(0.15)
+            task.wait(0.2)
         end
     end)
 end
