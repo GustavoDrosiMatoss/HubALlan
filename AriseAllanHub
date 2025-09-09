@@ -3302,67 +3302,77 @@ local function getCurrentCastleFloor()
     return current
 end
 
+-- Função para entrar no Castle
+local function joinCastle()
+    local joinArgs = {
+        [1] = {
+            [1] = {
+                ["Check"] = true,
+                ["Floor"] = tostring(ConfigSystem.CurrentConfig.EntryFloor or 1),
+                ["Event"] = "CastleAction",
+                ["Action"] = "Join"
+            },
+            [2] = "\12"
+        }
+    }
+    pcall(function() remote:FireServer(unpack(joinArgs)) end)
+end
+
 -- Loop do Auto Castle
 function autoCastle()
     task.spawn(function()
         while castleEnabled do
             -- Detectar andar atual
             local currentFloor = getCurrentCastleFloor()
-            if currentFloor and currentFloor >= exitFloor then
-                -- Sai do Castle
-                local leaveArgs = {
-                    [1] = {
-                        [1] = { ["Event"] = "LeaveDungeon" },
-                        [2] = "\12"
-                    }
-                }
-                pcall(function() remote:FireServer(unpack(leaveArgs)) end)
 
-                Fluent:Notify({
-                    Title = "Castle",
-                    Content = "Saiu no andar " .. tostring(exitFloor) .. ", reiniciando...",
-                    Duration = 3
-                })
-
-                task.wait(3)
-
-                -- Entrar novamente no andar inicial
-                local joinArgs = {
-                    [1] = {
+            -- Se não está em nenhuma Room (provavelmente fora do castelo)
+            if not currentFloor then
+                joinCastle()
+                task.wait(5) -- espera alguns segundos antes de tentar de novo
+            else
+                -- Se já atingiu o andar de saída, sai e entra de novo
+                if currentFloor >= exitFloor then
+                    local leaveArgs = {
                         [1] = {
-                            ["Check"] = true,
-                            ["Floor"] = tostring(ConfigSystem.CurrentConfig.EntryFloor or 1),
-                            ["Event"] = "CastleAction",
-                            ["Action"] = "Join"
-                        },
-                        [2] = "\12"
+                            [1] = { ["Event"] = "LeaveDungeon" },
+                            [2] = "\12"
+                        }
                     }
-                }
-                pcall(function() remote:FireServer(unpack(joinArgs)) end)
-                task.wait(2)
-            end
+                    pcall(function() remote:FireServer(unpack(leaveArgs)) end)
 
-            -- Farm normal de mobs
-            local mobsFolder = workspace:FindFirstChild("Enemies") or workspace:FindFirstChild("Mobs")
-            if mobsFolder then
-                for _, mob in pairs(mobsFolder:GetChildren()) do
-                    if not castleEnabled then break end
-                    local hrp = mob:FindFirstChild("HumanoidRootPart")
-                    local hum = mob:FindFirstChild("Humanoid")
-                    if hrp and hum and hum.Health > 0 then
-                        local plr = game.Players.LocalPlayer
-                        if plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
-                            plr.Character.HumanoidRootPart.CFrame = hrp.CFrame * CFrame.new(0, 3, 0)
+                    Fluent:Notify({
+                        Title = "Castle",
+                        Content = "Saiu no andar " .. tostring(exitFloor) .. ", reiniciando...",
+                        Duration = 3
+                    })
+
+                    task.wait(3)
+                    joinCastle()
+                    task.wait(2)
+                end
+
+                -- Farm normal de mobs
+                local mobsFolder = workspace:FindFirstChild("Enemies") or workspace:FindFirstChild("Mobs")
+                if mobsFolder then
+                    for _, mob in pairs(mobsFolder:GetChildren()) do
+                        if not castleEnabled then break end
+                        local hrp = mob:FindFirstChild("HumanoidRootPart")
+                        local hum = mob:FindFirstChild("Humanoid")
+                        if hrp and hum and hum.Health > 0 then
+                            local plr = game.Players.LocalPlayer
+                            if plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
+                                plr.Character.HumanoidRootPart.CFrame = hrp.CFrame * CFrame.new(0, 3, 0)
+                            end
+                            pcall(function()
+                                remote:FireServer("Attack", mob)
+                            end)
+                            task.wait(0.25)
                         end
-                        pcall(function()
-                            remote:FireServer("Attack", mob)
-                        end)
-                        task.wait(0.25)
                     end
                 end
             end
 
-            task.wait(0.4)
+            task.wait(0.5)
         end
     end)
 end
@@ -3378,19 +3388,7 @@ Tabs.dungeon:AddToggle("CastleToggle", {
 
         if state then
             task.spawn(function()
-                -- Join Castle Infernal
-                local joinArgs = {
-                    [1] = {
-                        [1] = {
-                            ["Check"] = true,
-                            ["Floor"] = tostring(ConfigSystem.CurrentConfig.EntryFloor or 1),
-                            ["Event"] = "CastleAction",
-                            ["Action"] = "Join"
-                        },
-                        [2] = "\12"
-                    }
-                }
-                pcall(function() remote:FireServer(unpack(joinArgs)) end)
+                joinCastle()
                 task.wait(1)
 
                 castleSessionActive = true
