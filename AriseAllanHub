@@ -3098,30 +3098,36 @@ local function startAutoCastle()
             if lastUsedFloor == currentFloor then
                 return false
             end
-            local prompt = portal:FindFirstChildOfClass("ProximityPrompt")
-            if not prompt then
-                for _, obj in ipairs(portal:GetDescendants()) do
-                    if obj:IsA("ProximityPrompt") then
-                        prompt = obj
-                        break
+
+            -- Loop até ativar
+            task.spawn(function()
+                while castleEnabled and lastUsedFloor ~= currentFloor do
+                    local prompt = portal:FindFirstChildOfClass("ProximityPrompt")
+                    if not prompt then
+                        for _, obj in ipairs(portal:GetDescendants()) do
+                            if obj:IsA("ProximityPrompt") then
+                                prompt = obj
+                                break
+                            end
+                        end
                     end
+                    if not prompt and portal.Parent then
+                        prompt = portal.Parent:FindFirstChildOfClass("ProximityPrompt")
+                    end
+
+                    if prompt then
+                        fireproximityprompt(prompt)
+                        print("🚀 Tentando ativar portal do andar " .. currentFloor)
+                        task.wait(0.5)
+                        lastUsedFloor = currentFloor
+                        print("✅ Portal ativado! Indo para o andar " .. (currentFloor + 1))
+                        break
+                    else
+                        warn("⚠️ Prompt não encontrado ainda, tentando de novo...")
+                    end
+                    task.wait(1)
                 end
-            end
-            if not prompt and portal.Parent then
-                prompt = portal.Parent:FindFirstChildOfClass("ProximityPrompt")
-            end
-            if prompt then
-                for i = 1, 3 do
-                    fireproximityprompt(prompt)
-                    task.wait(0.05)
-                end
-                lastUsedFloor = currentFloor
-                print("🚀 Portal ativado! Subindo do andar " .. currentFloor .. " para o andar " .. (currentFloor + 1))
-                return true
-            else
-                warn("ProximityPrompt não encontrado!")
-                return false
-            end
+            end)
         end
 
         -- loop principal
@@ -3172,7 +3178,6 @@ Tabs.dungeon:AddToggle("AutoCastle", {
 if ConfigSystem.CurrentConfig.CastleToggle then
     startAutoCastle()
 end
-
 
 -- ============================
 -- Auto Castle (com detecção via Room)
