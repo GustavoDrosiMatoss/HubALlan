@@ -3026,10 +3026,7 @@ end
 -- 2) Variáveis de controle
 local castleEnabled = false
 local portalWorkerRunning = false
-
--- Mantemos para debug e heurística de avanço
-local lastSeenFloor = nil
-local lastPortalInstance = nil
+local currentFloor = 0 -- andar confirmado (andar já usado)
 
 -- 3) Funções auxiliares
 local function startAutoCastle()
@@ -3102,7 +3099,6 @@ local function startAutoCastle()
         end
 
         local function findFirePortal()
-            -- Retorna o primeiro portal encontrado e o índice do "andar"
             for i = 1, 200 do
                 local room = world:FindFirstChild("Room_" .. i)
                 if room then
@@ -3118,7 +3114,6 @@ local function startAutoCastle()
         local function teleportNearPortal(portal)
             local hrp = getHRP()
             if not hrp or not portal or not portal.CFrame then return end
-            -- Posição 2 studs à frente do portal (elevado um pouco)
             local target = portal.CFrame * CFrame.new(0, 2, -2)
             hrp.CFrame = target
             hrp.Velocity = Vector3.zero
@@ -3130,17 +3125,16 @@ local function startAutoCastle()
             if prompt then return prompt end
             for _, obj in ipairs(portal:GetDescendants()) do
                 if obj:IsA("ProximityPrompt") then
-                    prompt = obj
-                    break
+                    return obj
                 end
             end
-            if not prompt and portal.Parent then
-                prompt = portal.Parent:FindFirstChildOfClass("ProximityPrompt")
+            if portal.Parent then
+                return portal.Parent:FindFirstChildOfClass("ProximityPrompt")
             end
-            return prompt
+            return nil
         end
 
-        -- ===== Ativador PERMANENTE do portal (tenta a cada 1s) =====
+        -- ===== Ativador PERMANENTE do portal =====
         local function runPortalActivator()
             if portalWorkerRunning then return end
             portalWorkerRunning = true
@@ -3149,114 +3143,43 @@ local function startAutoCastle()
                 while castleEnabled do
                     local portal, floor = findFirePortal()
                     if portal and floor then
-                        -- Guarda para heurística
-                        lastSeenFloor = floor
-                        if lastPortalInstance ~= portal then
-                            lastPortalInstance = portal
-                        end
-
-                        -- Tenta manter o player perto do portal
-                        local hrp = getHRP()
-                        if hrp and (hrp.Position - portal.Position).Magnitude > 6 then
-                            teleportNearPortal(portal)
-                        end
-
-                        -- Tenta ativar (com suporte a HoldDuration)
-                        local prompt = getPortalPrompt(portal)
-                        if prompt then
-                            -- Dispara múltiplas vezes para contornar lag/replicação
-                            for _ = 1, 3 do
-                                pcall(function()
-                                    if prompt.HoldDuration and prompt.HoldDuration > 0 then
-                                        -- Muitos executores aceitam 1 como "segurar"; usamos 1 e repetimos
-                                        fireproximityprompt(prompt, 1)
-                                    else
-                                        fireproximityprompt(prompt)
-                                    end
-                                end)
-                                task.wait(0.15)
+                        -- só tenta se o portal for de um andar maior que o já confirmado
+                        if floor > currentFloor then
+                            local hrp = getHRP()
+                            if hrp and (hrp.Position - portal.Position).Magnitude > 6 then
+                                teleportNearPortal(portal)
                             end
-                            print(("🚀 Tentando ativar portal do andar %d..."):format(floor))
-                        else
-                            warn("⚠️ ProximityPrompt do portal não encontrado (ainda).")
+
+                            local prompt = getPortalPrompt(portal)
+                            if prompt then
+                                for _ = 1, 3 do
+                                    pcall(function() fireproximityprompt(prompt) end)
+                                    task.wait(0.15)
+                                end
+                                print("🚀 Portal do andar " .. floor .. " ativado, subindo...")
+                                -- ⚡ trava aqui: marca como usado
+                                currentFloor = floor
+                            end
                         end
                     end
-
-                    -- Heurística simples: se o floor detectado aumentar, consideramos que subiu
-                    do
-                        local _, now = findFirePortal()
-                        if lastSeenFloor and now and now > lastSeenFloor then
-                            print(("✅ Portal ativado! Subiu do andar %d para %d."):format(lastSeenFloor, now))
-                            lastSeenFloor = now
-                        end
-                    end
-
-                    task.wait(1) -- roda para sempre de 1 em 1s
+                    task.wait(1)
                 end
                 portalWorkerRunning = false
             end)
         end
 
-        -- Inicia o ativador permanente
+        -- inicia ativador de portal
         runPortalActivator()
 
-        -- ===== Loop principal de combate/movimento =====
+        -- ===== Loop principal de combate =====
         while castleEnabled do
             local enemy = getClosestEnemy()
-
             if enemy then
                 moveToEnemy(enemy)
-                -- Espera o inimigo morrer / sumir
                 local tries = 0
                 while castleEnabled and enemy.Parent and (enemy:GetAttribute("HP") or 1) > 0 do
                     task.wait(0.2)
-                    tries += 1
-                    if tries % 20 == 0 then
-                        -- reaproxima a cada ~4s
-                        moveToEnemy(enemy)
-                    end
-                end
-            else
-                -- Se não tem inimigo visível, aproxima do portal (se existir); ativação fica por conta do worker
-                local portal, floor = findFirePortal()
-                if portal and floor then
-                    print("📍 Andar atual (detecção): " .. floor)
-                    teleportNearPortal(portal)
-                end
-                task.wait(0.3)
-            end
 
-            task.wait(0.15)
-        end
-    end)
-end
-
-local function stopAutoCastle()
-    castleEnabled = false
-end
-
--- 4) Toggle (usa a mesma chave que persiste: CastleToggle)
-Tabs.dungeon:AddToggle("AutoCastle", {
-    Title = "Auto INF (Castle Farm)",
-    Default = ConfigSystem.CurrentConfig.CastleToggle or false,
-    Callback = function(state)
-        ConfigSystem.CurrentConfig.CastleToggle = state
-        ConfigSystem.SaveConfig()
-
-        if state then
-            Fluent:Notify({ Title = "Auto Castle", Content = "Ativado", Duration = 3 })
-            startAutoCastle()
-        else
-            Fluent:Notify({ Title = "Auto Castle", Content = "Desativado", Duration = 3 })
-            stopAutoCastle()
-        end
-    end
-})
-
--- 5) Auto-boot (pra UIs que não disparam o Callback na carga)
-if ConfigSystem.CurrentConfig.CastleToggle then
-    startAutoCastle()
-end
 
 -- ============================
 -- Auto Castle (versão corrigida)
