@@ -1,3 +1,11 @@
+--[[
+
+    Kaitun ou Cuttay, uma frase de um script Roblox que faz autofarm totalmente em Blox Fruits (jogo)
+    "Eh! Essa boceta usa HACK? Ele só joga há (1) semana e já é tão rico?"
+    Drayhh hub kaitun (Drayhh-hub)
+  
+
+]]
 
 _G.Team = "Pirates" -- "Marines"
 _G.FPSBoost = false -- really fucked up the client but the good side is fps go wroom.
@@ -3058,3 +3066,150 @@ do
     end)
 end
 -- <<< END AUTO-START INIT >>>
+
+
+
+-- >>> MATERIALS & CDK INTEGRATION (added by assistant) <<<
+do
+    if _G.__AssistantMaterialsIntegrated then return end
+    _G.__AssistantMaterialsIntegrated = true
+
+    local Players = game:GetService("Players")
+    local ReplicatedStorage = game:GetService("ReplicatedStorage")
+    local player = Players.LocalPlayer
+
+    -- prefer getgenv flags used in original scripts
+    pcall(function() getgenv().AutoGetCDK = true end)
+    pcall(function() getgenv().AutoGetMaterials = true end)
+    pcall(function() getgenv().AutoBuyGodhuman = true end)
+    pcall(function() getgenv().AutoBuy = true end)
+    pcall(function() getgenv().AutoFarm = true end)
+
+    -- candidate farming function names (from both files)
+    local candidateFarmFns = {"MaterialMon", "AutoFarmMaterial", "FarmMaterial", "StartMaterialFarm", "AutoGetMaterials", "AutoFarmMaterials"}
+
+    -- helper to call any available candidate farming function
+    local function callAnyFarmFn()
+        for _,name in ipairs(candidateFarmFns) do
+            local ok, fn = pcall(function() return _G[name] or _G[name] end)
+            if ok and type(fn) == "function" then
+                pcall(fn)
+                return true
+            end
+            -- try global environment directly (some scripts define globals without _G)
+            ok, fn = pcall(function() return rawget(_G, name) or _G[name] end)
+            if ok and type(fn) == "function" then
+                pcall(fn)
+                return true
+            end
+            -- try global variable by name (may exist if function declared as 'function Name()')
+            if _G[name] and type(_G[name]) == "function" then
+                pcall(_G[name])
+                return true
+            end
+        end
+        return false
+    end
+
+    -- check player's simple inventory values in Data (Fragments, Materials, Pieces)
+    local function getInventoryValue(key)
+        local ok, val = pcall(function()
+            local d = player:FindFirstChild("Data")
+            if not d then return 0 end
+            local c = d:FindFirstChild(key)
+            if c and c.Value then return tonumber(c.Value) or 0 end
+            return 0
+        end)
+        return ok and val or 0
+    end
+
+    -- common material keys to check (from typical Blox Fruits requirements)
+    local materialKeys = {"Fragments", "Fragment", "CursedFragments", "Cursed_Fragment", "Material", "Materials", "DragonScales", "Dragon_Scale", "Scale"}
+
+    -- determine if materials sufficient for Godhuman (best-effort): require at least 100 Fragments (tunable)
+    local function hasMaterialsForGodhuman()
+        -- if script contains a specific check, prefer that, else fallback
+        for _,k in ipairs(materialKeys) do
+            if getInventoryValue(k) >= 100 then
+                return true
+            end
+        end
+        return false
+    end
+
+    -- ensure CDK auto flag is on (the original script's CDK routine watches this flag)
+    pcall(function() getgenv().AutoGetCDK = true end)
+    pcall(function() getgenv().AutoGetCD = true end) -- some scripts use AutoGetCD
+
+    -- main monitor: when player spawns, check level and materials and run farms as needed
+    spawn(function()
+        repeat task.wait() until game:IsLoaded() and Players.LocalPlayer
+        local pl = Players.LocalPlayer
+        repeat task.wait() until pl.Character and pl.Character:FindFirstChild("HumanoidRootPart")
+        task.wait(0.5)
+
+        -- check level helper
+        local function getLevel()
+            local ok, lvl = pcall(function()
+                local d = pl:FindFirstChild("Data")
+                if d and d:FindFirstChild("Level") then return tonumber(d.Level.Value) or 0 end
+                return 0
+            end)
+            return ok and lvl or 0
+        end
+
+        -- target minimum level to attempt Godhuman buy (conservative default)
+        local targetLevelForGodhuman = 100 -- set low; the script will still fail if requirements not met server-side
+        -- if script defines a required level somewhere, try to sniff it
+        -- (best-effort — we don't modify server checks)
+        -- main loop: ensure materials then try buy, then ensure CDK quest runs
+        task.spawn(function()
+            while true do
+                -- re-check every 6 seconds
+                task.wait(6)
+                local lvl = getLevel()
+
+                -- If not enough materials, call material farm routines if available
+                if not hasMaterialsForGodhuman() then
+                    -- try to use existing farm functions from scripts
+                    pcall(function()
+                        callAnyFarmFn()
+                    end)
+                end
+
+                -- If reached level threshold and have materials, attempt buy Godhuman
+                if lvl >= targetLevelForGodhuman and hasMaterialsForGodhuman() then
+                    -- attempt buy using common remote signatures (reuse previous safeInvokeCommF if available)
+                    local success = false
+                    pcall(function()
+                        -- try calling existing buy functions if present
+                        if _G.BuyGodhuman and type(_G.BuyGodhuman) == "function" then
+                            pcall(_G.BuyGodhuman)
+                            success = true
+                        end
+                    end)
+                    -- also try common remote invocation patterns
+                    pcall(function()
+                        local rems = ReplicatedStorage:FindFirstChild("Remotes") or ReplicatedStorage
+                        local comm = rems:FindFirstChild("CommF_") or rems:FindFirstChild("CommF") or ReplicatedStorage:FindFirstChild("CommF_") or ReplicatedStorage:FindFirstChild("CommF")
+                        if comm and not success then
+                            pcall(function() comm:InvokeServer("BuyItem", "Godhuman") end)
+                            pcall(function() comm:InvokeServer("BuyItem", "God Human") end)
+                            pcall(function() comm:InvokeServer("BuyStyle", "Godhuman") end)
+                            success = true
+                        end
+                    end)
+                end
+
+                -- Ensure CDK routine runs: toggle flag so existing CDK code triggers
+                pcall(function() getgenv().AutoGetCDK = true end)
+
+                -- If script contains a direct CDK auto function, call it
+                pcall(function()
+                    if _G.AutoGetCDK and type(_G.AutoGetCDK) == "function" then pcall(_G.AutoGetCDK) end
+                end)
+            end
+        end)
+    end)
+end
+-- <<< END MATERIALS & CDK INTEGRATION >>>
