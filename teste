@@ -748,8 +748,19 @@ spawn(function()
                     replicated.Remotes.CommF_:InvokeServer("AbandonQuest")
                 end
 
-              if plr.PlayerGui.Main.Quest.Visible == false then
+        if plr.PlayerGui.Main.Quest.Visible == false then
     _tp(QuestNeta()[6])
+    local tries = 0
+    repeat
+        replicated.Remotes.CommF_:InvokeServer("StartQuest", QuestNeta()[3], QuestNeta()[2])
+        task.wait(0.5)
+        tries = tries + 1
+    until plr.PlayerGui.Main.Quest.Visible == true or tries >= 5
+
+    if not plr.PlayerGui.Main.Quest.Visible then
+        warn("⚠️ Falha ao aceitar missão após várias tentativas, tentando novamente...")
+    end
+end
 
     -- Espera chegar e garantir que o NPC existe
     local tries = 0
