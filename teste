@@ -736,127 +736,79 @@ FarmLevel:OnChanged(function(Value)
     _G.Level = Value
 end)
 
--- Função para resetar a quest corretamente
-local function ResetQuest()
-    replicated.Remotes.CommF_:InvokeServer("AbandonQuest")
-    repeat wait() until not plr.PlayerGui.Main.Quest.Visible
-    wait(0.2)
-end
-
--- Detectar se a quest terminou (0/x)
-local function QuestCompleted()
-    local txt = ""
-
-    pcall(function()
-        txt = plr.PlayerGui.Main.Quest.Container.QuestTitle.Title.Text
-    end)
-
-    return string.find(txt, "0/") ~= nil
-end
-
 spawn(function()
     while wait(5) do
-        if not _G.Level then continue end
-
-        pcall(function()
-
-            ----------------------------------------------------
-            -- SISTEMA DE TRAVEL 2000 (caso use)
-            ----------------------------------------------------
-            if _G.Travel2000 then
-                TravelTo2000()
-
-                if (Root.Position - CFrame2000.Position).Magnitude < 10 then
-                    local args = {"TravelToSubmergedIsland"}
-                    local result = game:GetService("ReplicatedStorage")
-                        :WaitForChild("Modules")
-                        :FindFirstChild("FS/SubmarineWorkerSpeak")
-                        :InvokeServer(unpack(args))
-
-                    if result then
-                        _G.Travel2000 = false
-                    end
-                end
-                return
-            end
-
-            ----------------------------------------------------
-            -- INÍCIO DO FARM
-            ----------------------------------------------------
-            local Q = QuestNeta()  -- SUA FUNÇÃO AQUI
-            local QuestGui = plr.PlayerGui.Main.Quest
-
-            -- leitura segura do título
-            local QuestTitle = ""
+        if _G.Level then
             pcall(function()
-                QuestTitle = QuestGui.Container.QuestTitle.Title.Text or ""
-            end)
-
-            ----------------------------------------------------
-            -- Se a quest não bate com o mob → reset
-            ----------------------------------------------------
-            if QuestTitle == "" or not string.find(QuestTitle, Q[5]) then
-                ResetQuest()
-            end
-
-            ----------------------------------------------------
-            -- SEM QUEST ATIVA → PEGAR NOVA QUEST
-            ----------------------------------------------------
-            if not QuestGui.Visible then
-
-                -- teleport até o NPC
-                _tp(Q[6])
-
-                if (Root.Position - Q[6].Position).Magnitude <= 4 then
-                    replicated.Remotes.CommF_:InvokeServer("StartQuest", Q[3], Q[2])
-                    wait(0.4) -- evita travamento
+                -- Sistema de viagem para 2000m (se necessário)
+                if _G.Travel2000 then
+                    TravelTo2000()
+                    if (Root.Position - CFrame2000.Position).Magnitude < 10 then
+                        local args = {[1] = "TravelToSubmergedIsland"}
+                        local result = game:GetService("ReplicatedStorage"):WaitForChild("Modules"):FindFirstChild("FS/SubmarineWorkerSpeak"):InvokeServer(unpack(args))
+                        if result then
+                            _G.Travel2000 = false
+                        end
+                    end
+                    return
                 end
 
-                return
-            end
+                -- Atualiza informações da quest
+                pcall(QuestCheck)
 
-            ----------------------------------------------------
-            -- COM QUEST ATIVA → CAÇAR INIMIGOS
-            ----------------------------------------------------
-            local MobName = Q[1]
-
-            if workspace.Enemies:FindFirstChild(MobName) then
-
-                for _, v in pairs(workspace.Enemies:GetChildren()) do
-
-                    if Attack.Alive(v) and v.Name == MobName then
-
-                        repeat
-                            Attack.Kill(v, _G.Level)
-                            wait()
-                        until
-                            v.Humanoid.Health <= 0
-                            or not v.Parent
-                            or QuestCompleted()
-                            or not _G.Level
-
-                        -- SE COMPLETOU A QUEST → ABANDONA E PEGA OUTRA
-                        if QuestCompleted() then
-                            ResetQuest()
-                        end
-
+                -- Verifica se a quest está visível
+                if plr.PlayerGui.Main.Quest.Visible then
+                    local QuestTitle = plr.PlayerGui.Main.Quest.Container.QuestTitle.Title.Text
+                    
+                    -- Abandona se a quest não corresponder ao mob atual
+                    if not string.find(QuestTitle, QuestNeta()[5]) then
+                        replicated.Remotes.CommF_:InvokeServer("AbandonQuest")
+                        wait(0.5) -- Aguarda um pouco antes de continuar
                         return
                     end
+
+                    -- Procura e ataca os inimigos
+                    local foundEnemy = false
+                    if workspace.Enemies:FindFirstChild(QuestNeta()[1]) then
+                        for i, v in pairs(workspace.Enemies:GetChildren()) do
+                            if Attack.Alive(v) and v.Name == QuestNeta()[1] then
+                                foundEnemy = true
+                                repeat
+                                    wait()
+                                    Attack.Kill(v, _G.Level)
+                                until not _G.Level 
+                                    or v.Humanoid.Health <= 0 
+                                    or not v.Parent 
+                                    or not plr.PlayerGui.Main.Quest.Visible
+                                break
+                            end
+                        end
+                    end
+
+                    -- Se não encontrou inimigos, vai para a área de spawn
+                    if not foundEnemy then
+                        _tp(QuestNeta()[4])
+                        
+                        -- Tenta encontrar no ReplicatedStorage
+                        local enemy = replicated:FindFirstChild(QuestNeta()[1])
+                        if enemy and enemy:FindFirstChild("HumanoidRootPart") then
+                            _tp(enemy.HumanoidRootPart.CFrame * CFrame.new(0, 30, 0))
+                        end
+                    end
+
+                else
+                    -- Quest não está visível, vai pegar
+                    _tp(QuestNeta()[6])
+                    
+                    -- Só pega a quest se estiver perto do NPC
+                    if (Root.Position - QuestNeta()[6].Position).Magnitude <= 10 then
+                        wait(0.3) -- Pequeno delay para garantir que chegou
+                        replicated.Remotes.CommF_:InvokeServer("StartQuest", QuestNeta()[3], QuestNeta()[2])
+                        wait(0.5) -- Aguarda a quest aparecer
+                    end
                 end
-
-            else
-                ----------------------------------------------------
-                -- NÃO TEM MOB → TELEPORTA PARA ÁREA DO MOB
-                ----------------------------------------------------
-                _tp(Q[4])
-
-                local enemy = workspace.Enemies:FindFirstChild(MobName)
-                if enemy then
-                    _tp(enemy.HumanoidRootPart.CFrame * CFrame.new(0, 30, 0))
-                end
-            end
-
-        end)
+            end)
+        end
     end
 end)
 
