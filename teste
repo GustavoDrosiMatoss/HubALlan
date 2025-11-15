@@ -736,10 +736,22 @@ FarmLevel:OnChanged(function(Value)
     _G.Level = Value
 end)
 
--- Função para resetar quest SEM TRAVAR no NPC
+-- Função para resetar a quest corretamente
 local function ResetQuest()
     replicated.Remotes.CommF_:InvokeServer("AbandonQuest")
     repeat wait() until not plr.PlayerGui.Main.Quest.Visible
+    wait(0.2)
+end
+
+-- Detectar se a quest terminou (0/x)
+local function QuestCompleted()
+    local txt = ""
+
+    pcall(function()
+        txt = plr.PlayerGui.Main.Quest.Container.QuestTitle.Title.Text
+    end)
+
+    return string.find(txt, "0/") ~= nil
 end
 
 spawn(function()
@@ -748,94 +760,97 @@ spawn(function()
 
         pcall(function()
 
-            ---------------------------------------------------
-            -- 1) SYSTEMA TRAVEL 2000 (SE VOCÊ USA)
-            ---------------------------------------------------
+            ----------------------------------------------------
+            -- SISTEMA DE TRAVEL 2000 (caso use)
+            ----------------------------------------------------
             if _G.Travel2000 then
                 TravelTo2000()
 
                 if (Root.Position - CFrame2000.Position).Magnitude < 10 then
                     local args = {"TravelToSubmergedIsland"}
-
-                    local result = game:GetService("ReplicatedStorage"):WaitForChild("Modules")
-                        :FindFirstChild("FS/SubmarineWorkerSpeak"):InvokeServer(unpack(args))
+                    local result = game:GetService("ReplicatedStorage")
+                        :WaitForChild("Modules")
+                        :FindFirstChild("FS/SubmarineWorkerSpeak")
+                        :InvokeServer(unpack(args))
 
                     if result then
                         _G.Travel2000 = false
                     end
                 end
-
                 return
             end
 
-            ---------------------------------------------------
-            -- 2) INÍCIO DO SISTEMA DE FARM
-            ---------------------------------------------------
-            local Q = QuestNeta()    -- SUA FUNÇÃO AQUI
+            ----------------------------------------------------
+            -- INÍCIO DO FARM
+            ----------------------------------------------------
+            local Q = QuestNeta()  -- SUA FUNÇÃO AQUI
             local QuestGui = plr.PlayerGui.Main.Quest
 
-            -- Atualizar QuestTitle com segurança
+            -- leitura segura do título
             local QuestTitle = ""
             pcall(function()
                 QuestTitle = QuestGui.Container.QuestTitle.Title.Text or ""
             end)
 
-            ---------------------------------------------------
-            -- 3) Se o título da quest estiver errado → reset
-            ---------------------------------------------------
-            if QuestTitle == "" 
-                or not string.find(QuestTitle, Q[5]) then
-
+            ----------------------------------------------------
+            -- Se a quest não bate com o mob → reset
+            ----------------------------------------------------
+            if QuestTitle == "" or not string.find(QuestTitle, Q[5]) then
                 ResetQuest()
             end
 
-            ---------------------------------------------------
-            -- 4) Se NÃO tem quest → pegar quest
-            ---------------------------------------------------
+            ----------------------------------------------------
+            -- SEM QUEST ATIVA → PEGAR NOVA QUEST
+            ----------------------------------------------------
             if not QuestGui.Visible then
-                
-                -- Ir ao NPC da Quest
+
+                -- teleport até o NPC
                 _tp(Q[6])
 
                 if (Root.Position - Q[6].Position).Magnitude <= 4 then
                     replicated.Remotes.CommF_:InvokeServer("StartQuest", Q[3], Q[2])
-                    wait(0.4) -- ESSA LINHA PREVINE TRAVAMENTO NO NPC
+                    wait(0.4) -- evita travamento
                 end
 
                 return
             end
 
-            ---------------------------------------------------
-            -- 5) Se tem quest ativa → matar inimigos
-            ---------------------------------------------------
-            local TargetName = Q[1]
+            ----------------------------------------------------
+            -- COM QUEST ATIVA → CAÇAR INIMIGOS
+            ----------------------------------------------------
+            local MobName = Q[1]
 
-            if workspace.Enemies:FindFirstChild(TargetName) then
+            if workspace.Enemies:FindFirstChild(MobName) then
 
-                for _, mob in ipairs(workspace.Enemies:GetChildren()) do
-                    if Attack.Alive(mob) and mob.Name == TargetName then
+                for _, v in pairs(workspace.Enemies:GetChildren()) do
+
+                    if Attack.Alive(v) and v.Name == MobName then
 
                         repeat
-                            Attack.Kill(mob, _G.Level)
+                            Attack.Kill(v, _G.Level)
                             wait()
-                        until mob.Humanoid.Health <= 0 
-                           or not mob.Parent 
-                           or not _G.Level
+                        until
+                            v.Humanoid.Health <= 0
+                            or not v.Parent
+                            or QuestCompleted()
+                            or not _G.Level
 
-                        -- Reset pós-kill para garantir próxima quest
-                        ResetQuest()
+                        -- SE COMPLETOU A QUEST → ABANDONA E PEGA OUTRA
+                        if QuestCompleted() then
+                            ResetQuest()
+                        end
 
                         return
                     end
                 end
 
             else
-                ---------------------------------------------------
-                -- 6) Se não tem inimigo → teleport até área
-                ---------------------------------------------------
+                ----------------------------------------------------
+                -- NÃO TEM MOB → TELEPORTA PARA ÁREA DO MOB
+                ----------------------------------------------------
                 _tp(Q[4])
 
-                local enemy = workspace.Enemies:FindFirstChild(TargetName)
+                local enemy = workspace.Enemies:FindFirstChild(MobName)
                 if enemy then
                     _tp(enemy.HumanoidRootPart.CFrame * CFrame.new(0, 30, 0))
                 end
@@ -844,7 +859,6 @@ spawn(function()
         end)
     end
 end)
-
 
 local Q = Tabs.Main:AddToggle("Q", {Title = "Auto katakuri", Description = "", Default = false})
 Q:OnChanged(function(Value)
