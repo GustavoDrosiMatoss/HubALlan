@@ -741,6 +741,11 @@ FarmLevel:OnChanged(function(Value)
     _G.Level = Value 
 end)
 
+-- 🔥 Sistema anti-travamento
+local questAttempts = 0
+local maxAttempts = 10
+local lastQuestCheck = tick()
+
 spawn(function()
     while wait(Sec) do
         if _G.Level then
@@ -752,7 +757,8 @@ spawn(function()
                 -- 🔥 Verifica se a quest está ativa e se é a correta
                 if QuestVisible and not string.find(QuestTitle, QuestNeta()[5]) then
                     replicated.Remotes.CommF_:InvokeServer("AbandonQuest")
-                    wait(0.5) -- Aguarda o jogo processar o abandono
+                    wait(0.5)
+                    questAttempts = 0 -- Reset contador
                 end
                 
                 -- 🔥 Se a quest não está visível, vai pegar
@@ -760,18 +766,43 @@ spawn(function()
                     local questPos = QuestNeta()[6]
                     local distance = (Root.Position - questPos.Position).Magnitude
                     
+                    -- ⭐ ANTI-TRAVAMENTO: Detecta se está preso tentando pegar quest
+                    if distance <= 15 then
+                        questAttempts = questAttempts + 1
+                        
+                        -- Se tentou muitas vezes e não pegou, FORÇA O RESET
+                        if questAttempts >= maxAttempts then
+                            print("🚨 TRAVADO NO NPC! Forçando reset...")
+                            
+                            -- Teleporta para longe e volta
+                            _tp(Root.CFrame * CFrame.new(0, 100, 0))
+                            wait(1)
+                            questAttempts = 0
+                            
+                            -- Tenta abandonar qualquer quest fantasma
+                            replicated.Remotes.CommF_:InvokeServer("AbandonQuest")
+                            wait(1)
+                        end
+                    else
+                        questAttempts = 0 -- Reset se está longe
+                    end
+                    
                     -- Se está longe, teleporta
                     if distance > 10 then
                         _tp(questPos)
-                        wait(0.3) -- Aguarda o teleporte
+                        wait(0.5)
                     -- Se está perto, tenta pegar a quest
                     elseif distance <= 10 then
+                        print("📝 Tentando pegar quest... (Tentativa " .. questAttempts .. ")")
                         replicated.Remotes.CommF_:InvokeServer("StartQuest", QuestNeta()[3], QuestNeta()[2])
-                        wait(0.5) -- ⭐ IMPORTANTE: Aguarda o jogo processar a quest
+                        wait(1) -- Aumentei para 1 segundo
                     end
                     
                 -- 🔥 Se a quest está ativa, vai farmar
                 elseif QuestVisible then
+                    questAttempts = 0 -- Reset contador quando quest está ativa
+                    lastQuestCheck = tick()
+                    
                     local mobName = QuestNeta()[1]
                     local mob = workspace.Enemies:FindFirstChild(mobName)
                     
