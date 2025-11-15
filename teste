@@ -737,86 +737,67 @@ FarmLevel:OnChanged(function(Value)
 end)
 
 spawn(function()
-    while wait(Sec) do
-        if _G.Level then
-            -- 🔥 Atualiza as informações da missão antes de iniciar o farm
-            pcall(QuestCheck)
-
+    while wait(5) do
+        if G_Level then
             pcall(function()
-                local QuestTitle = plr.PlayerGui.Main.Quest.Container.QuestTitle.Title.Text
-                if not string.find(QuestTitle, QuestNeta()[5]) then
-                    replicated.Remotes.CommF_:InvokeServer("AbandonQuest")
-                end
 
-        if plr.PlayerGui.Main.Quest.Visible == false then
-    _tp(QuestNeta()[6])
-    local tries = 0
-    repeat
-        replicated.Remotes.CommF_:InvokeServer("StartQuest", QuestNeta()[3], QuestNeta()[2])
-        task.wait(0.5)
-        tries = tries + 1
-    until plr.PlayerGui.Main.Quest.Visible == true or tries >= 5
-
-    if not plr.PlayerGui.Main.Quest.Visible then
-        warn("⚠️ Falha ao aceitar missão após várias tentativas, tentando novamente...")
-    end
-end
-
-    -- Espera chegar e garantir que o NPC existe
-    local tries = 0
-    repeat
-        task.wait(0.5)
-        tries += 1
-    until (Root.Position - QuestNeta()[6].Position).Magnitude <= 5 or tries >= 10
-
-    -- Procura o NPC no workspace
-    local npc = workspace:FindFirstChild(QuestNeta()[3]) or workspace.Map:FindFirstChild(QuestNeta()[3])
-
-    -- Se o NPC existir, tenta pegar a missão até conseguir
-    if npc then
-        local gotQuest = false
-        for i = 1, 5 do
-            replicated.Remotes.CommF_:InvokeServer("StartQuest", QuestNeta()[3], QuestNeta()[2])
-            task.wait(1)
-            if plr.PlayerGui.Main.Quest.Visible == true then
-                gotQuest = true
-                break
-            end
-        end
-        if not gotQuest then
-            warn("⚠️ Falha ao pegar missão. Tentando novamente...")
-        end
-    else
-        warn("❌ NPC da missão não encontrado:", QuestNeta()[3])
-    end
-end
-
-                elseif plr.PlayerGui.Main.Quest.Visible == true then
-                    if workspace.Enemies:FindFirstChild(QuestNeta()[1]) then
-                        for i, v in pairs(workspace.Enemies:GetChildren()) do
-                            if Attack.Alive(v) then
-                                if v.Name == QuestNeta()[1] then
-                                    if string.find(QuestTitle, QuestNeta()[5]) then
-                                        repeat wait()
-                                            Attack.Kill(v, _G.Level)
-                                        until not _G.Level or v.Humanoid.Health <= 0 or not v.Parent or plr.PlayerGui.Main.Quest.Visible == false
-                                    else
-                                        replicated.Remotes.CommF_:InvokeServer("AbandonQuest")
-                                    end
-                                end
-                            end
-                        end
-                    else
-                        _tp(QuestNeta()[4])
-                        if replicated:FindFirstChild(QuestNeta()[1]) then
-                            _tp(replicated:FindFirstChild(QuestNeta()[1]).HumanoidRootPart.CFrame * CFrame.new(0, 30, 0))
+                if G_Travel2000 then
+                    TravelTo2000()
+                    if (Root.Position - CFrame2000.Position).Magnitude < 10 then
+                        local args = {
+                            [1] = "TravelToSubmergedIsland"
+                        }
+                        local result = game:GetService("ReplicatedStorage"):WaitForChild("Modules"):FindFirstChild("FS/SubmarineWorkerSpeak"):InvokeServer(unpack(args))
+                        if result then
+                            G_Travel2000 = false
                         end
                     end
+               return
+            end
+local QuestTitle = plr.PlayerGui.Main.Quest.Container.QuestTitle.Title.Text
+
+-- Abandonar quest se não corresponder
+if not string.find(QuestTitle, QuestNeta()[5]) then
+    replicated.Remotes.Comm:InvokeServer("AbandonQuest")
+end
+
+-- Caso a quest não esteja visível
+if not plr.PlayerGui.Main.Quest.Visible then
+    tp(QuestNeta()[6])
+
+    if (Root.Position - QuestNeta()[6].Position).Magnitude <= 5 then
+        replicated.Remotes.Comm:InvokeServer("StartQuest", QuestNeta()[3], QuestNeta()[2])
+    end
+
+-- Caso a quest esteja visível
+elseif plr.PlayerGui.Main.Quest.Visible then
+    if workspace.Enemies:FindFirstChild(QuestNeta()[1]) then
+        for i, v in pairs(workspace.Enemies:GetChildren()) do
+            if Attack.Alive(v) and v.Name == QuestNeta()[1] then
+                if string.find(QuestTitle, QuestNeta()[5]) then
+                    -- Executa ataque até condições de parada
+                    repeat
+                        wait()
+                        Attack.Kill(v, G.Level)
+                    until not G.Level 
+                        or v.Humanoid.Health < 8 
+                        or not v.Parent 
+                        or not plr.PlayerGui.Main.Quest.Visible
+
+                    replicated.Remotes.CommF:InvokeServer("AbandonQuest")
                 end
-            end)
+            end
+        end
+    else
+        tp(QuestNeta()[4])
+
+        local enemy = replicated:FindFirstChild(QuestNeta()[1])
+        if enemy then
+            tp(enemy.HumanoidRootPart.CFrame * CFrame.new(0, 30, 0))
         end
     end
-end)
+end
+
 
 local Q = Tabs.Main:AddToggle("Q", {Title = "Auto katakuri", Description = "", Default = false})
 Q:OnChanged(function(Value)
