@@ -1,3 +1,68 @@
+
+-- ==========================================================
+-- FLUENT UI – SUBSTITUIÇÃO COMPLETA DA INTERFACE ANTIGA
+-- ==========================================================
+
+local Fluent = loadstring(game:HttpGet(
+    "https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"
+))()
+
+local Window = Fluent:CreateWindow({
+    Title = "Allan Hub",
+    SubTitle = "By Allan",
+    TabWidth = 160,
+    Size = UDim2.fromOffset(520, 350),
+    Acrylic = true,
+    Theme = "Dark",
+    MinimizeKey = Enum.KeyCode.End
+})
+
+local TabMap = {}
+
+local function GetOrCreateTab(title)
+    if TabMap[title] then
+        return TabMap[title]
+    end
+    local newTab = Window:AddTab({ Title = title, Icon = "menu" })
+    TabMap[title] = newTab
+    return newTab
+end
+
+local UI = {}
+
+function UI:Tab(data)
+    return GetOrCreateTab(data.Title or "Tab")
+end
+
+function UI:Toggle(tab, data)
+    return tab:AddToggle(data)
+end
+
+function UI:Button(tab, data)
+    return tab:AddButton(data)
+end
+
+function UI:Dropdown(tab, data)
+    return tab:AddDropdown(data)
+end
+
+function UI:Slider(tab, data)
+    return tab:AddSlider(data)
+end
+
+function UI:Section(tab, title)
+    return tab:AddSection(title)
+end
+
+_G.FluentUI = UI
+local v452 = _G.FluentUI
+
+-- ==========================================================
+-- FIM DO FLUENT – O RESTO DO SCRIPT CONTINUA NORMAL
+-- ==========================================================
+
+
+
 -- ts file was generated at discord.gg/25ms
 
 
