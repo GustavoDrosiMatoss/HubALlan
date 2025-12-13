@@ -2571,7 +2571,7 @@ local function buyCastleTicket()
                 ["Event"] = "CastleAction",
                 ["Action"] = "BuyTicket"
             },
-            [2] = "\16"
+            [2] = "\17"
         }
     }
     pcall(function() 
@@ -2590,7 +2590,7 @@ local function joinCastle(floor)
                 ["Event"] = "CastleAction",
                 ["Action"] = "Join"
             },
-            [2] = "\16"
+            [2] = "\17"
         }
     }
     pcall(function() 
@@ -2606,7 +2606,7 @@ local function createCastle()
                 ["Event"] = "CastleAction",
                 ["Action"] = "Create"
             },
-            [2] = "\16"
+            [2] = "\17"
         }
     }
     pcall(function() 
