@@ -2709,7 +2709,7 @@ local function farmCastleMobs()
                 local player = game.Players.LocalPlayer
                 if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
                     -- Teleportar para o mob
-                    player.Character.HumanoidRootPart.CFrame = mob.CFrame * CFrame.new(0, 3, 0)
+                    player.Character.HumanoidRootPart.CFrame = mob.CFrame * CFrame.new(0, 0, 3)
                     
                     -- Atacar o mob
                     pcall(function()
