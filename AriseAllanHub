@@ -2571,7 +2571,7 @@ local function buyCastleTicket()
                 ["Event"] = "CastleAction",
                 ["Action"] = "BuyTicket"
             },
-            [2] = "\17"
+            [2] = "\4"
         }
     }
     pcall(function() 
@@ -2590,7 +2590,7 @@ local function joinCastle(floor)
                 ["Event"] = "CastleAction",
                 ["Action"] = "Join"
             },
-            [2] = "\17"
+            [2] = "\4"
         }
     }
     pcall(function() 
@@ -2606,7 +2606,7 @@ local function createCastle()
                 ["Event"] = "CastleAction",
                 ["Action"] = "Create"
             },
-            [2] = "\17"
+            [2] = "\4"
         }
     }
     pcall(function() 
@@ -2924,7 +2924,7 @@ Tabs.dungeon:AddDropdown("CastleSpeedDropdown", {
                         ["Event"] = "CastleAction",
                         ["Action"] = "SpeedUp"
                     },
-                    [2] = "\16"
+                    [2] = "\4"
                 }
             }
             game:GetService("ReplicatedStorage").BridgeNet2.dataRemoteEvent:FireServer(unpack(args))
@@ -2950,7 +2950,7 @@ Tabs.dungeon:AddToggle("EnableCastleSpeed", {
                         ["Event"] = "CastleAction",
                         ["Action"] = "SpeedUp"
                     },
-                    [2] = "\16"
+                    [2] = "\4"
                 }
             }
             game:GetService("ReplicatedStorage").BridgeNet2.dataRemoteEvent:FireServer(unpack(args))
@@ -3143,7 +3143,7 @@ local function aplicarVelocidade(valor)
                 ["Event"] = eventName,
                 ["Action"] = "SpeedUp"
             },
-            [2] = "\16"
+            [2] = "\14"
         }
     }
     if remote then remote:FireServer(unpack(argsSpeed)) end
@@ -3226,7 +3226,7 @@ local function iniciarDesertoInfinito()
                     ["Event"] = eventName,
                     ["Action"] = "Create"
                 },
-                [2] = "\15"
+                [2] = "\4"
             }
         }
         if remote then remote:FireServer(unpack(argsCreate)) end
@@ -3241,7 +3241,7 @@ local function iniciarDesertoInfinito()
                         ["Event"] = eventName,
                         ["Action"] = "Start"
                     },
-                    [2] = "\15"
+                    [2] = "\4"
                 }
             }
             if remote then remote:FireServer(unpack(argsStart)) end
